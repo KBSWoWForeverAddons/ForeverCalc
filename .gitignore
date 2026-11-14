@@ -1,0 +1,7 @@
+*.ps1
+!deploy.ps1
+commit_messages.txt
+.vscode/
+Bugs.txt
+.DS_Store
+Thumbs.db
