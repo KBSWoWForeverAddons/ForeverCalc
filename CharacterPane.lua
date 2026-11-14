@@ -10,16 +10,6 @@ local function FormatNumber(n)
     return formatted
 end
 
-local function GetPlayerClassColorRGB()
-    local _, classFile = UnitClass("player")
-    local color = (CUSTOM_CLASS_COLORS and classFile and CUSTOM_CLASS_COLORS[classFile])
-        or (RAID_CLASS_COLORS and classFile and RAID_CLASS_COLORS[classFile])
-    if color and color.r and color.g and color.b then
-        return color.r, color.g, color.b
-    end
-    return 1.0, 0.82, 0.0
-end
-
 local PANE_WIDTH = 284
 local PANE_HEIGHT = 536
 
@@ -112,7 +102,7 @@ function FeralCalc:CreateCharacterPane()
     local formLabel = headerBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     formLabel:SetPoint("TOPLEFT", headerBox, "TOPLEFT", 10, -7)
     formLabel:SetText("Form / Stance:")
-    formLabel:SetTextColor(0.78, 0.80, 0.84)
+    formLabel:SetTextColor(0.2, 0.95, 0.2)
 
     local formValue = headerBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     formValue:SetPoint("TOPRIGHT", headerBox, "TOPRIGHT", -10, -7)
@@ -120,7 +110,7 @@ function FeralCalc:CreateCharacterPane()
     local hpLabel = headerBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     hpLabel:SetPoint("BOTTOMLEFT", headerBox, "BOTTOMLEFT", 10, 7)
     hpLabel:SetText("Max Health:")
-    hpLabel:SetTextColor(0.78, 0.80, 0.84)
+    hpLabel:SetTextColor(0.2, 0.95, 0.2)
 
     local hpValue = headerBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     hpValue:SetPoint("BOTTOMRIGHT", headerBox, "BOTTOMRIGHT", -10, 7)
@@ -138,7 +128,7 @@ function FeralCalc:CreateCharacterPane()
         local hdr = pane:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         hdr:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
         hdr:SetText(text)
-        hdr:SetTextColor(GetPlayerClassColorRGB())
+        hdr:SetTextColor(1.0, 0.49, 0.04)
 
         local line = pane:CreateTexture(nil, "ARTWORK")
         line:SetHeight(2)
@@ -163,7 +153,7 @@ function FeralCalc:CreateCharacterPane()
         local left = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         left:SetPoint("LEFT", row, "LEFT", 2, 0)
         left:SetText(labelText)
-        left:SetTextColor(0.78, 0.80, 0.84)
+        left:SetTextColor(0.2, 0.95, 0.2)
 
         local right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         right:SetPoint("RIGHT", row, "RIGHT", -2, 0)
@@ -976,7 +966,7 @@ function FeralCalc:UpdateCharacterPane()
     if s.isCaster then
         if self.characterPane.offenseHeader then
             self.characterPane.offenseHeader:SetText("Caster Offense")
-            self.characterPane.offenseHeader:SetTextColor(GetPlayerClassColorRGB())
+            self.characterPane.offenseHeader:SetTextColor(1.0, 0.49, 0.04)
         end
         if leftLabels.weaponDmg then leftLabels.weaponDmg:SetText("Melee Damage:") end
         if leftLabels.attackPower then leftLabels.attackPower:SetText("Bonus Spell Dmg:") end
@@ -996,7 +986,7 @@ function FeralCalc:UpdateCharacterPane()
     elseif s.classFile == "HUNTER" then
         if self.characterPane.offenseHeader then
             self.characterPane.offenseHeader:SetText("Ranged & Melee Offense")
-            self.characterPane.offenseHeader:SetTextColor(GetPlayerClassColorRGB())
+            self.characterPane.offenseHeader:SetTextColor(1.0, 0.49, 0.04)
         end
         if leftLabels.weaponDmg then leftLabels.weaponDmg:SetText("Ranged Damage:") end
         if leftLabels.attackPower then leftLabels.attackPower:SetText("Ranged Attack Power:") end
@@ -1017,7 +1007,7 @@ function FeralCalc:UpdateCharacterPane()
     else
         if self.characterPane.offenseHeader then
             self.characterPane.offenseHeader:SetText("Tank / Melee Offense")
-            self.characterPane.offenseHeader:SetTextColor(GetPlayerClassColorRGB())
+            self.characterPane.offenseHeader:SetTextColor(1.0, 0.49, 0.04)
         end
         if leftLabels.weaponDmg then leftLabels.weaponDmg:SetText("Weapon Damage:") end
         if leftLabels.attackPower then leftLabels.attackPower:SetText("Attack Power:") end
