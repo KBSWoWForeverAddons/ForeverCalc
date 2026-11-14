@@ -10,8 +10,18 @@ local function FormatNumber(n)
     return formatted
 end
 
+local function GetPlayerClassColorRGB()
+    local _, classFile = UnitClass("player")
+    local color = (CUSTOM_CLASS_COLORS and classFile and CUSTOM_CLASS_COLORS[classFile])
+        or (RAID_CLASS_COLORS and classFile and RAID_CLASS_COLORS[classFile])
+    if color and color.r and color.g and color.b then
+        return color.r, color.g, color.b
+    end
+    return 1.0, 0.82, 0.0
+end
+
 local PANE_WIDTH = 284
-local PANE_HEIGHT = 540
+local PANE_HEIGHT = 536
 
 function FeralCalc:CreateCharacterPane()
     if self.paneCreated or not PaperDollFrame then
@@ -124,20 +134,17 @@ function FeralCalc:CreateCharacterPane()
     local function AddSectionHeader(text)
         yOffset = yOffset - 8
         local hdr = pane:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        local fontPath, fontSize = hdr:GetFont()
-        if fontPath and fontSize then
-            hdr:SetFont(fontPath, fontSize + 1.5, "OUTLINE")
-        end
         hdr:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
-        hdr:SetText("|cFFFFD100" .. text .. "|r")
+        hdr:SetText(text)
+        hdr:SetTextColor(GetPlayerClassColorRGB())
 
         local line = pane:CreateTexture(nil, "ARTWORK")
         line:SetHeight(2)
-        line:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset - 16)
-        line:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -14, yOffset - 16)
+        line:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset - 15)
+        line:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -14, yOffset - 15)
         line:SetColorTexture(0.7, 0.55, 0.25, 0.85)
 
-        yOffset = yOffset - 21
+        yOffset = yOffset - 20
         return hdr
     end
 
@@ -965,7 +972,8 @@ function FeralCalc:UpdateCharacterPane()
     -- Section 3: Offense (Dynamically adapts for Caster, Hunter, or Melee/Tank)
     if s.isCaster then
         if self.characterPane.offenseHeader then
-            self.characterPane.offenseHeader:SetText("|cFFFFD100Caster Offense|r")
+            self.characterPane.offenseHeader:SetText("Caster Offense")
+            self.characterPane.offenseHeader:SetTextColor(GetPlayerClassColorRGB())
         end
         if leftLabels.weaponDmg then leftLabels.weaponDmg:SetText("Melee Damage:") end
         if leftLabels.attackPower then leftLabels.attackPower:SetText("Bonus Spell Dmg:") end
@@ -984,7 +992,8 @@ function FeralCalc:UpdateCharacterPane()
         end
     elseif s.classFile == "HUNTER" then
         if self.characterPane.offenseHeader then
-            self.characterPane.offenseHeader:SetText("|cFFFFD100Ranged & Melee Offense|r")
+            self.characterPane.offenseHeader:SetText("Ranged & Melee Offense")
+            self.characterPane.offenseHeader:SetTextColor(GetPlayerClassColorRGB())
         end
         if leftLabels.weaponDmg then leftLabels.weaponDmg:SetText("Ranged Damage:") end
         if leftLabels.attackPower then leftLabels.attackPower:SetText("Ranged Attack Power:") end
@@ -1004,7 +1013,8 @@ function FeralCalc:UpdateCharacterPane()
         end
     else
         if self.characterPane.offenseHeader then
-            self.characterPane.offenseHeader:SetText("|cFFFFD100Tank / Melee Offense|r")
+            self.characterPane.offenseHeader:SetText("Tank / Melee Offense")
+            self.characterPane.offenseHeader:SetTextColor(GetPlayerClassColorRGB())
         end
         if leftLabels.weaponDmg then leftLabels.weaponDmg:SetText("Weapon Damage:") end
         if leftLabels.attackPower then leftLabels.attackPower:SetText("Attack Power:") end
