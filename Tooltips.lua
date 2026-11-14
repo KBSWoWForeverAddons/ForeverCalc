@@ -124,7 +124,7 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
         )
         if showArmor and data.type ~= "ranged_arcane" then
             tooltip:AddDoubleLine(
-                string.format("  |cFFFF8040vs Lvl 63 Boss (-%s%% Armor):|r", FormatDec(data.bossArmorDRPct)),
+                string.format("  |cFFFF8040vs Lvl %d Boss (-%s%% Armor):|r", data.bossLevel or 63, FormatDec(data.bossArmorDRPct)),
                 string.format("|cFFFFCC80%s - %s|r |cFFAAAAAA(Avg: %s)|r", FormatInt(data.minPostArmor), FormatInt(data.maxPostArmor), FormatInt(data.avgPostArmor))
             )
         end
@@ -149,7 +149,7 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
         end
         if showArmor then
             tooltip:AddDoubleLine(
-                string.format("  |cFFFF8040vs Lvl 63 Boss (-%s%% Armor):|r", FormatDec(data.bossArmorDRPct)),
+                string.format("  |cFFFF8040vs Lvl %d Boss (-%s%% Armor):|r", data.bossLevel or 63, FormatDec(data.bossArmorDRPct)),
                 string.format("|cFFFFCC80%s - %s|r |cFFAAAAAA(Avg: %s)|r", FormatInt(data.minPostArmor), FormatInt(data.maxPostArmor), FormatInt(data.avgPostArmor))
             )
         end
@@ -198,7 +198,7 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
         )
         if showArmor then
             tooltip:AddDoubleLine(
-                string.format("  |cFFFF8040vs Lvl 63 Boss (-%s%%):|r", FormatDec(data.bossArmorDRPct)),
+                string.format("  |cFFFF8040vs Lvl %d Boss (-%s%%):|r", data.bossLevel or 63, FormatDec(data.bossArmorDRPct)),
                 string.format("|cFFFFCC80%s|r (1T) / |cFFFFCC80%s|r (%dT)", FormatInt(data.singlePostArmor), FormatInt(data.cleavePostArmor), data.targets)
             )
         end

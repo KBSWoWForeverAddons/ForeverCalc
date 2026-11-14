@@ -605,31 +605,43 @@ function FeralCalc:GetMitigationStats()
         end
     end
 
-    local rawDR60 = effectiveArmor / (effectiveArmor + 5500)
+    local playerLevel = (type(UnitLevel) == "function" and SafeNumber(UnitLevel("player"), 60)) or 60
+    if playerLevel <= 0 then playerLevel = 60 end
+    local bossLevel = playerLevel + 3
+    local equalDefense = playerLevel * 5
+    local bossDefense = bossLevel * 5
+
+    local armorConstEqual = 400 + 85 * playerLevel
+    local armorConstBoss = 400 + 85 * bossLevel
+    local armorCapEqual = 3 * armorConstEqual
+    local armorCapBoss = 3 * armorConstBoss
+
+    local rawDR60 = effectiveArmor / (effectiveArmor + armorConstEqual)
     local dr60 = math.min(C.ARMOR_CAP_PCT, rawDR60)
 
-    local rawDR63 = effectiveArmor / (effectiveArmor + 5755)
+    local rawDR63 = effectiveArmor / (effectiveArmor + armorConstBoss)
     local dr63 = math.min(C.ARMOR_CAP_PCT, rawDR63)
 
     -- Total physical mitigation including Defensive Stance (-10% dmg taken)
     local effectiveDR63 = 1 - ((1 - dr63) * stanceDmgMult)
     local effectiveDR60 = 1 - ((1 - dr60) * stanceDmgMult)
 
-    local capProgress60 = math.min(100, (effectiveArmor / C.ARMOR_CAP_60) * 100)
-    local capProgress63 = math.min(100, (effectiveArmor / C.ARMOR_CAP_63) * 100)
-    local armorNeeded60 = math.max(0, C.ARMOR_CAP_60 - effectiveArmor)
-    local armorNeeded63 = math.max(0, C.ARMOR_CAP_63 - effectiveArmor)
+    local capProgress60 = math.min(100, (effectiveArmor / armorCapEqual) * 100)
+    local capProgress63 = math.min(100, (effectiveArmor / armorCapBoss) * 100)
+    local armorNeeded60 = math.max(0, armorCapEqual - effectiveArmor)
+    local armorNeeded63 = math.max(0, armorCapBoss - effectiveArmor)
 
     -- Defense Skill & Critical Hit Immunity
     local baseDefense, armorDefense = self:GetPlayerDefense()
     local exactDefense = baseDefense + armorDefense
     local totalDefense = math.floor(exactDefense + 0.5)
 
-    local bossCritFromDef = 5.0 + (C.BOSS_DEFENSE - totalDefense) * 0.04
+    local bossCritFromDef = 5.0 + (bossDefense - totalDefense) * 0.04
     local talentCritRed = (talents.survivalOfFittest or 0) * 1.0
     local bossCritPct = math.max(0, bossCritFromDef - talentCritRed)
-    local defNeededForCrit = math.max(0, C.CRIT_IMMUNE_DEF - totalDefense)
-    local isCritImmune = (bossCritPct <= 0) or (totalDefense >= C.CRIT_IMMUNE_DEF)
+    local critImmuneDef = math.ceil(bossDefense + math.max(0, (5.0 - talentCritRed) / 0.04))
+    local defNeededForCrit = math.max(0, critImmuneDef - totalDefense)
+    local isCritImmune = (bossCritPct <= 0) or (totalDefense >= critImmuneDef)
 
     -- Avoidance (Dodge, Parry, Miss) & Block
     local dodgePct = 0
@@ -656,8 +668,8 @@ function FeralCalc:GetMitigationStats()
         if ok then blockValue = SafeNumber(bv, 0) end
     end
 
-    local bossMissPct = math.max(0, C.BASE_BOSS_MISS + (totalDefense - C.BOSS_DEFENSE) * 0.04)
-    local equalMissPct = math.max(0, C.BASE_BOSS_MISS + (totalDefense - C.EQUAL_DEFENSE) * 0.04)
+    local bossMissPct = math.max(0, C.BASE_BOSS_MISS + (totalDefense - bossDefense) * 0.04)
+    local equalMissPct = math.max(0, C.BASE_BOSS_MISS + (totalDefense - equalDefense) * 0.04)
 
     -- Pure Avoidance = Miss + Dodge + Parry
     local totalAvoidancePct = bossMissPct + dodgePct + parryPct
@@ -782,11 +794,20 @@ function FeralCalc:GetMitigationStats()
         end
     end
 
-    local playerLevel = (type(UnitLevel) == "function" and SafeNumber(UnitLevel("player"), 60)) or 60
-    if playerLevel <= 0 then playerLevel = 60 end
-    local bossTargetArmorDR = C.BOSS_ARMOR / (C.BOSS_ARMOR + 400 + 85 * playerLevel)
+    local bossArmor = (bossLevel >= 63) and C.BOSS_ARMOR or math.floor(C.BOSS_ARMOR * (bossLevel / 63) + 0.5)
+    local bossTargetArmorDR = bossArmor / (bossArmor + 400 + 85 * playerLevel)
 
     return {
+        playerLevel = playerLevel,
+        bossLevel = bossLevel,
+        equalDefense = equalDefense,
+        bossDefense = bossDefense,
+        armorConstEqual = armorConstEqual,
+        armorConstBoss = armorConstBoss,
+        armorCapEqual = armorCapEqual,
+        armorCapBoss = armorCapBoss,
+        critImmuneDef = critImmuneDef,
+        bossArmor = bossArmor,
         classFile = classFile,
         className = className,
         canParry = canParry,
@@ -941,6 +962,7 @@ function FeralCalc:GetAbilityDamage(spellID, spellName, spellSubText)
         cost = cost,
         formKey = stats.formKey,
         classFile = stats.classFile,
+        bossLevel = stats.bossLevel or 63,
         bossArmorDRPct = stats.bossTargetArmorDR * 100,
         talents = talents,
     }

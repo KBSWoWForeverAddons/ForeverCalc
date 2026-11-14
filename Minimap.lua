@@ -177,7 +177,7 @@ function FeralCalc:CreateOptionsFrame()
     AddCheckbox(
         "postArmor",
         "Post-Armor Boss Tooltip Estimates",
-        "Include Lvl 63 Raid Boss armor reduction in spell tooltips.",
+        "Include Boss (Player Level +3) armor reduction in spell tooltips.",
         -196,
         function(checked)
             FeralCalc:InitDB()

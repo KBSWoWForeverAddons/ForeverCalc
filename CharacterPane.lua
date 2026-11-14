@@ -11,7 +11,7 @@ local function FormatNumber(n)
 end
 
 local PANE_WIDTH = 284
-local PANE_HEIGHT = 536
+local PANE_HEIGHT = 540
 
 function FeralCalc:CreateCharacterPane()
     if self.paneCreated or not PaperDollFrame then
@@ -124,16 +124,20 @@ function FeralCalc:CreateCharacterPane()
     local function AddSectionHeader(text)
         yOffset = yOffset - 8
         local hdr = pane:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local fontPath, fontSize = hdr:GetFont()
+        if fontPath and fontSize then
+            hdr:SetFont(fontPath, fontSize + 1.5, "OUTLINE")
+        end
         hdr:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
         hdr:SetText("|cFFFFD100" .. text .. "|r")
 
         local line = pane:CreateTexture(nil, "ARTWORK")
-        line:SetHeight(1)
-        line:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset - 15)
-        line:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -14, yOffset - 15)
-        line:SetColorTexture(0.6, 0.5, 0.25, 0.6)
+        line:SetHeight(2)
+        line:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset - 16)
+        line:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -14, yOffset - 16)
+        line:SetColorTexture(0.7, 0.55, 0.25, 0.85)
 
-        yOffset = yOffset - 20
+        yOffset = yOffset - 21
         return hdr
     end
 
@@ -189,30 +193,30 @@ function FeralCalc:CreateCharacterPane()
         tt:AddDoubleLine("Effective Armor:", FormatNumber(s.effectiveArmor), 1, 1, 1, 0, 1, 0)
     end)
 
-    AddStatRow("dr60", "DR vs Lvl 60:", "Damage Reduction (vs Lvl 60)", function(tt, s)
-        tt:AddLine("Formula: Armor / (Armor + 5500)", 0.8, 0.8, 0.8)
-        tt:AddDoubleLine("75% Cap Target:", "16,500 Armor", 1, 1, 1, 1, 0.82, 0)
-        tt:AddDoubleLine("Armor to Lvl 60 Cap:", FormatNumber(s.armorNeeded60), 1, 1, 1, 1, 1, 1)
+    AddStatRow("dr60", "DR vs Equal Lvl:", "Damage Reduction (Equal Level)", function(tt, s)
+        tt:AddLine(string.format("Formula (vs Lvl %d): Armor / (Armor + %d)", s.playerLevel, s.armorConstEqual), 0.8, 0.8, 0.8)
+        tt:AddDoubleLine("75% Cap Target:", FormatNumber(s.armorCapEqual) .. " Armor", 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine(string.format("Armor to Lvl %d Cap:", s.playerLevel), FormatNumber(s.armorNeeded60), 1, 1, 1, 1, 1, 1)
     end)
 
-    AddStatRow("dr63", "DR vs Lvl 63 Boss:", "Damage Reduction (vs Lvl 63 Boss)", function(tt, s)
-        tt:AddLine("Formula: Armor / (Armor + 5755)", 0.8, 0.8, 0.8)
-        tt:AddDoubleLine("Armor DR (vs Lvl 63):", string.format("%.2f%%", s.dr63Pct), 1, 1, 1, 1, 1, 1)
+    AddStatRow("dr63", "DR vs +3 Boss:", "Damage Reduction (vs +3 Boss)", function(tt, s)
+        tt:AddLine(string.format("Formula (vs Lvl %d): Armor / (Armor + %d)", s.bossLevel, s.armorConstBoss), 0.8, 0.8, 0.8)
+        tt:AddDoubleLine(string.format("Armor DR (vs Lvl %d):", s.bossLevel), string.format("%.2f%%", s.dr63Pct), 1, 1, 1, 1, 1, 1)
         if s.stanceDmgMult ~= 1.0 then
             tt:AddDoubleLine("Total Physical DR (w/ Stance):", string.format("%.2f%%", s.effectiveDR63Pct), 1, 1, 1, 0, 1, 0)
         end
-        tt:AddDoubleLine("75% Armor Cap Target:", "17,265 Armor", 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("75% Armor Cap Target:", FormatNumber(s.armorCapBoss) .. " Armor", 1, 1, 1, 1, 0.82, 0)
     end)
 
-    AddStatRow("armorCap", "Armor Cap (Boss):", "75% Armor Cap Progress (17,265)", function(tt, s)
-        tt:AddDoubleLine("vs Lvl 63 Boss (17,265):", string.format("%.1f%% (%s needed)", s.capProgress63, FormatNumber(s.armorNeeded63)), 1, 1, 1, 1, 0.82, 0)
-        tt:AddDoubleLine("vs Lvl 60 Mob (16,500):", string.format("%.1f%% (%s needed)", s.capProgress60, FormatNumber(s.armorNeeded60)), 1, 1, 1, 0.8, 0.8, 0.8)
+    AddStatRow("armorCap", "Armor Cap (Boss):", "75% Armor Cap Progress", function(tt, s)
+        tt:AddDoubleLine(string.format("vs Lvl %d Boss (%s):", s.bossLevel, FormatNumber(s.armorCapBoss)), string.format("%.1f%% (%s needed)", s.capProgress63, FormatNumber(s.armorNeeded63)), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine(string.format("vs Lvl %d Mob (%s):", s.playerLevel, FormatNumber(s.armorCapEqual)), string.format("%.1f%% (%s needed)", s.capProgress60, FormatNumber(s.armorNeeded60)), 1, 1, 1, 0.8, 0.8, 0.8)
     end)
 
     AddStatRow("ehp", "Physical EHP (Boss):", "Effective Health (EHP)", function(tt, s)
         tt:AddLine("Physical EHP = MaxHP / (1 - TotalPhysicalDR)", 0.8, 0.8, 0.8)
-        tt:AddDoubleLine("Physical EHP (vs Lvl 63):", FormatNumber(s.physicalEHP), 1, 1, 1, 0, 1, 0)
-        tt:AddDoubleLine("Physical EHP (vs Lvl 60):", FormatNumber(s.physicalEHP60), 1, 1, 1, 0.8, 0.8, 0.8)
+        tt:AddDoubleLine(string.format("Physical EHP (vs Lvl %d):", s.bossLevel), FormatNumber(s.physicalEHP), 1, 1, 1, 0, 1, 0)
+        tt:AddDoubleLine(string.format("Physical EHP (vs Lvl %d):", s.playerLevel), FormatNumber(s.physicalEHP60), 1, 1, 1, 0.8, 0.8, 0.8)
         tt:AddDoubleLine("Avoidance-Adjusted EHP:", FormatNumber(s.avoidanceEHP), 1, 1, 1, 0, 0.8, 1)
     end)
 
@@ -256,9 +260,9 @@ function FeralCalc:CreateCharacterPane()
     end)
 
     AddStatRow("bossMiss", "Boss Miss Chance:", "Enemy Miss Chance", function(tt, s)
-        tt:AddLine("Formula vs Lvl 63: 5.0% + (Defense - 315) * 0.04%", 0.8, 0.8, 0.8)
-        tt:AddDoubleLine("vs Lvl 63 Boss (315 WS):", string.format("%.2f%%", s.bossMissPct), 1, 1, 1, 1, 0.82, 0)
-        tt:AddDoubleLine("vs Lvl 60 Mob (300 WS):", string.format("%.2f%%", s.equalMissPct), 1, 1, 1, 0.8, 0.8, 0.8)
+        tt:AddLine(string.format("Formula vs Lvl %d: 5.0%% + (Defense - %d) * 0.04%%", s.bossLevel, s.bossDefense), 0.8, 0.8, 0.8)
+        tt:AddDoubleLine(string.format("vs Lvl %d Boss (%d WS):", s.bossLevel, s.bossDefense), string.format("%.2f%%", s.bossMissPct), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine(string.format("vs Lvl %d Mob (%d WS):", s.playerLevel, s.equalDefense), string.format("%.2f%%", s.equalMissPct), 1, 1, 1, 0.8, 0.8, 0.8)
     end)
 
     AddStatRow("totalAvoid", "Total Avoidance:", "Avoidance & Combat Table Coverage", function(tt, s)
@@ -273,21 +277,21 @@ function FeralCalc:CreateCharacterPane()
         end
     end)
 
-    AddStatRow("bossCrit", "Boss Crit Chance:", "Raid Boss Critical Strike Chance", function(tt, s)
-        tt:AddLine("Formula: 5.0% + (315 - Defense) * 0.04%", 0.8, 0.8, 0.8)
-        tt:AddDoubleLine("Crit Immunity Cap:", "440 Defense", 1, 1, 1, 1, 0.82, 0)
+    AddStatRow("bossCrit", "Boss Crit Chance:", "Boss Critical Strike Chance (+3 Lvl)", function(tt, s)
+        tt:AddLine(string.format("Formula: 5.0%% + (%d - Defense) * 0.04%%", s.bossDefense), 0.8, 0.8, 0.8)
+        tt:AddDoubleLine(string.format("Crit Immunity Cap (Lvl %d):", s.bossLevel), string.format("%d Defense", s.critImmuneDef), 1, 1, 1, 1, 0.82, 0)
     end)
 
-    AddStatRow("critImmunity", "Crit Immunity:", "Raid Boss Crit Immunity (440 Defense)", function(tt, s)
+    AddStatRow("critImmunity", "Crit Immunity:", "Boss Crit Immunity (+3 Lvl)", function(tt, s)
         if s.isCritImmune then
-            tt:AddLine("You are Crit Immune against Level 63 Raid Bosses!", 0, 1, 0, true)
+            tt:AddLine(string.format("You are Crit Immune against Level %d Bosses!", s.bossLevel), 0, 1, 0, true)
         else
-            tt:AddDoubleLine("Defense Needed:", string.format("%d more Defense", s.defNeededForCrit), 1, 1, 1, 1, 0.4, 0.4)
+            tt:AddDoubleLine(string.format("Defense Needed (vs Lvl %d):", s.bossLevel), string.format("%d more Defense", s.defNeededForCrit), 1, 1, 1, 1, 0.4, 0.4)
         end
     end)
 
-    AddStatRow("bossCrush", "Boss Crush Chance:", "Raid Boss Crushing Blows (1.5x Dmg)", function(tt, s)
-        tt:AddLine("Level 63 Bosses (315 WS) have a 15.0% base chance to land Crushing Blows.", 0.85, 0.85, 0.85, true)
+    AddStatRow("bossCrush", "Boss Crush Chance:", "Boss Crushing Blows (1.5x Dmg)", function(tt, s)
+        tt:AddLine(string.format("Level %d Bosses (%d WS) have a 15.0%% base chance to land Crushing Blows.", s.bossLevel, s.bossDefense), 0.85, 0.85, 0.85, true)
         tt:AddLine("Reaching 102.4% combined Miss + Dodge + Parry + Block pushes Crushing Blows completely off the attack table.", 1, 0.82, 0, true)
         tt:AddDoubleLine("Current Table Coverage:", string.format("%.2f%% / 102.4%%", s.combatTablePct), 1, 1, 1, 0, 0.8, 1)
         tt:AddDoubleLine("Needed for Crush Cap:", string.format("%.2f%%", s.avoidanceToCrushCap), 1, 1, 1, 1, 0.5, 0.2)
@@ -340,40 +344,40 @@ function FeralCalc:CreateCharacterPane()
     AddStatRow("hitChance", "Bonus Melee Hit:", "Bonus Hit Chance", function(tt, s)
         if s.isCaster then
             tt:AddDoubleLine("Bonus Spell Hit:", string.format("+%.1f%%", s.spellHitPct or 0), 1, 1, 1, 0, 1, 0)
-            tt:AddDoubleLine("Lvl 63 Boss Spell Hit Cap:", "16.0% (1% min resist)", 1, 1, 1, 1, 0.82, 0)
-            tt:AddDoubleLine("Equal-Level Spell Hit Cap:", "3.0% (1% min resist)", 1, 1, 1, 0.8, 0.8, 0.8)
+            tt:AddDoubleLine(string.format("Lvl %d Boss Spell Hit Cap:", s.bossLevel), "16.0% (1% min resist)", 1, 1, 1, 1, 0.82, 0)
+            tt:AddDoubleLine(string.format("Lvl %d Mob Spell Hit Cap:", s.playerLevel), "3.0% (1% min resist)", 1, 1, 1, 0.8, 0.8, 0.8)
         else
             local hitVal = (s.classFile == "HUNTER") and (s.rangedHitPct or s.meleeHitPct) or s.meleeHitPct
             tt:AddDoubleLine("Bonus Melee/Ranged Hit:", string.format("+%.1f%%", hitVal), 1, 1, 1, 0, 1, 0)
-            tt:AddDoubleLine("Lvl 63 Boss Hit Cap (315 Def):", "9.0% (8.0% with 305 WS)", 1, 1, 1, 1, 0.82, 0)
-            tt:AddDoubleLine("Equal-Level Mob Hit Cap:", "5.0%", 1, 1, 1, 0.8, 0.8, 0.8)
+            tt:AddDoubleLine(string.format("Lvl %d Boss Hit Cap (%d Def):", s.bossLevel, s.bossDefense), string.format("9.0%% (8.0%% with %d WS)", s.equalDefense + 5), 1, 1, 1, 1, 0.82, 0)
+            tt:AddDoubleLine(string.format("Lvl %d Mob Hit Cap:", s.playerLevel), "5.0%", 1, 1, 1, 0.8, 0.8, 0.8)
         end
     end)
 
     AddStatRow("hitCap", "White Hit Cap (Boss):", "Hit Cap Progress", function(tt, s)
         if s.isCaster then
-            tt:AddLine("Caster spells vs Level 63 Raid Boss (17% base miss, 1% min resist):", 0.85, 0.85, 0.85, true)
+            tt:AddLine(string.format("Caster spells vs Level %d Boss (17%% base miss, 1%% min resist):", s.bossLevel), 0.85, 0.85, 0.85, true)
             if s.isSpellHitCappedBoss then
-                tt:AddDoubleLine("vs Lvl 63 Raid Boss (16.0% Cap):", "CAPPED (99% max hit)", 1, 1, 1, 0, 1, 0)
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (16.0%% Cap):", s.bossLevel), "CAPPED (99% max hit)", 1, 1, 1, 0, 1, 0)
             else
-                tt:AddDoubleLine("vs Lvl 63 Raid Boss (16.0% Cap):", string.format("%.1f%% Spell Hit needed", s.spellHitNeededBoss), 1, 1, 1, 1, 0.4, 0.4)
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (16.0%% Cap):", s.bossLevel), string.format("%.1f%% Spell Hit needed", s.spellHitNeededBoss), 1, 1, 1, 1, 0.4, 0.4)
             end
             if s.isSpellHitCappedEqual then
-                tt:AddDoubleLine("vs Equal-Level Mob (3.0% Cap):", "CAPPED (99% max hit)", 1, 1, 1, 0, 1, 0)
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (3.0%% Cap):", s.playerLevel), "CAPPED (99% max hit)", 1, 1, 1, 0, 1, 0)
             else
-                tt:AddDoubleLine("vs Equal-Level Mob (3.0% Cap):", string.format("%.1f%% Spell Hit needed", s.spellHitNeededEqual), 1, 1, 1, 1, 0.82, 0)
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (3.0%% Cap):", s.playerLevel), string.format("%.1f%% Spell Hit needed", s.spellHitNeededEqual), 1, 1, 1, 1, 0.82, 0)
             end
         else
             tt:AddLine("Single-wield / Ranged / Shapeshift white & yellow attacks:", 0.85, 0.85, 0.85)
             if s.isHitCappedBoss then
-                tt:AddDoubleLine("vs Lvl 63 Raid Boss (9.0% Cap):", "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (9.0%% Cap):", s.bossLevel), "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
             else
-                tt:AddDoubleLine("vs Lvl 63 Raid Boss (9.0% Cap):", string.format("%.1f%% Hit needed", s.hitNeededBoss), 1, 1, 1, 1, 0.4, 0.4)
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (9.0%% Cap):", s.bossLevel), string.format("%.1f%% Hit needed", s.hitNeededBoss), 1, 1, 1, 1, 0.4, 0.4)
             end
             if s.isHitCappedEqual then
-                tt:AddDoubleLine("vs Equal-Level Mob (5.0% Cap):", "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (5.0%% Cap):", s.playerLevel), "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
             else
-                tt:AddDoubleLine("vs Equal-Level Mob (5.0% Cap):", string.format("%.1f%% Hit needed", s.hitNeededEqual), 1, 1, 1, 1, 0.82, 0)
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (5.0%% Cap):", s.playerLevel), string.format("%.1f%% Hit needed", s.hitNeededEqual), 1, 1, 1, 1, 0.82, 0)
             end
         end
     end)
@@ -908,6 +912,10 @@ function FeralCalc:UpdateCharacterPane()
     self.characterPane.hpValue:SetText("|cFF00FF00" .. FormatNumber(s.maxHP) .. "|r")
 
     -- Section 1: Mitigation & Health
+    local leftLabels = self.characterPane.leftLabels or {}
+    if leftLabels.dr60 then leftLabels.dr60:SetText(string.format("DR vs Lvl %d:", s.playerLevel)) end
+    if leftLabels.dr63 then leftLabels.dr63:SetText(string.format("DR vs Lvl %d Boss:", s.bossLevel)) end
+
     rows.armor:SetText("|cFFFFFFFF" .. FormatNumber(s.effectiveArmor) .. "|r")
     rows.dr60:SetText(string.format("|cFFFFFFFF%.2f%%|r", s.dr60Pct))
     if s.stanceDmgMult < 1.0 then
@@ -943,7 +951,7 @@ function FeralCalc:UpdateCharacterPane()
     rows.bossCrit:SetText(string.format("%s%.2f%%|r", critColor, s.bossCritPct))
 
     if s.isCritImmune then
-        rows.critImmunity:SetText("|cFF00FF00IMMUNE (440+)|r")
+        rows.critImmunity:SetText(string.format("|cFF00FF00IMMUNE (%d+)|r", s.critImmuneDef))
     else
         rows.critImmunity:SetText(string.format("|cFFFF8040%d Def needed|r", s.defNeededForCrit))
     end
@@ -955,7 +963,6 @@ function FeralCalc:UpdateCharacterPane()
     end
 
     -- Section 3: Offense (Dynamically adapts for Caster, Hunter, or Melee/Tank)
-    local leftLabels = self.characterPane.leftLabels or {}
     if s.isCaster then
         if self.characterPane.offenseHeader then
             self.characterPane.offenseHeader:SetText("|cFFFFD100Caster Offense|r")
