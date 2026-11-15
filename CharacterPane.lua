@@ -118,21 +118,63 @@ function FeralCalc:CreateCharacterPane()
     pane.hpValue = hpValue
     pane.rows = {}
     pane.leftLabels = {}
+    pane.sections = {}
 
     local yOffset = -84
+    local currentSection = nil
 
-    local function AddSectionHeader(text)
+    local function AddSectionHeader(key, text)
         yOffset = yOffset - 8
-        local hdr = pane:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        hdr:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
+
+        local headerBtn = CreateFrame("Button", nil, pane)
+        headerBtn:SetSize(PANE_WIDTH - 28, 18)
+        headerBtn:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
+
+        local highlight = headerBtn:CreateTexture(nil, "BACKGROUND")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(1, 0.82, 0, 0.10)
+        highlight:Hide()
+
+        local indicator = headerBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        indicator:SetPoint("RIGHT", headerBtn, "RIGHT", -2, 0)
+        indicator:SetText("|cFFFFD100[-]|r")
+
+        local hdr = headerBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        hdr:SetPoint("LEFT", headerBtn, "LEFT", 0, 0)
         hdr:SetText(text)
         hdr:SetTextColor(1.0, 0.49, 0.04)
 
-        local line = pane:CreateTexture(nil, "ARTWORK")
+        local line = headerBtn:CreateTexture(nil, "ARTWORK")
         line:SetHeight(2)
-        line:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset - 15)
-        line:SetPoint("TOPRIGHT", pane, "TOPRIGHT", -14, yOffset - 15)
+        line:SetPoint("TOPLEFT", headerBtn, "TOPLEFT", 0, -15)
+        line:SetPoint("TOPRIGHT", headerBtn, "TOPRIGHT", 0, -15)
         line:SetColorTexture(0.7, 0.55, 0.25, 0.85)
+
+        local sec = {
+            key = key,
+            headerBtn = headerBtn,
+            title = hdr,
+            indicator = indicator,
+            rows = {},
+        }
+        table.insert(pane.sections, sec)
+        currentSection = sec
+
+        headerBtn:SetScript("OnEnter", function()
+            highlight:Show()
+        end)
+        headerBtn:SetScript("OnLeave", function()
+            highlight:Hide()
+        end)
+        headerBtn:SetScript("OnClick", function()
+            FeralCalc:InitDB()
+            local charKey = FeralCalc:GetCharacterKey()
+            FeralCalc.db.collapsedSectionsByChar = FeralCalc.db.collapsedSectionsByChar or {}
+            FeralCalc.db.collapsedSectionsByChar[charKey] = FeralCalc.db.collapsedSectionsByChar[charKey] or {}
+            local collapsed = FeralCalc:GetSectionCollapsed(key, FeralCalc.lastStats)
+            FeralCalc.db.collapsedSectionsByChar[charKey][key] = not collapsed
+            FeralCalc:LayoutCharacterPane()
+        end)
 
         yOffset = yOffset - 20
         return hdr
@@ -177,13 +219,16 @@ function FeralCalc:CreateCharacterPane()
 
         pane.rows[key] = right
         pane.leftLabels[key] = left
+        if currentSection then
+            table.insert(currentSection.rows, row)
+        end
         yOffset = yOffset - 18
     end
 
     -- =========================================================================
     -- SECTION 1: MITIGATION & HEALTH
     -- =========================================================================
-    AddSectionHeader("Mitigation & Health")
+    AddSectionHeader("mitigation", "Mitigation & Health")
 
     AddStatRow("armor", "Armor:", "Effective Armor", function(tt, s)
         tt:AddDoubleLine("Base Armor:", FormatNumber(s.baseArmor), 1, 1, 1, 1, 1, 1)
@@ -226,7 +271,7 @@ function FeralCalc:CreateCharacterPane()
     -- =========================================================================
     -- SECTION 2: AVOIDANCE & BOSS TABLE
     -- =========================================================================
-    AddSectionHeader("Avoidance & Boss Table")
+    AddSectionHeader("avoidance", "Avoidance & Boss Table")
 
     AddStatRow("defense", "Defense Skill:", "Defense Skill", function(tt, s)
         tt:AddDoubleLine("Base Defense:", tostring(s.baseDefense), 1, 1, 1, 1, 1, 1)
@@ -297,7 +342,7 @@ function FeralCalc:CreateCharacterPane()
     -- =========================================================================
     -- SECTION 3: OFFENSE (Dynamically switches for Tank/Melee, Hunter, & Caster)
     -- =========================================================================
-    pane.offenseHeader = AddSectionHeader("Tank Offense")
+    pane.offenseHeader = AddSectionHeader("offense", "Tank Offense")
 
     AddStatRow("weaponDmg", "Weapon Damage:", "Weapon Damage & Speed", function(tt, s)
         if s.classFile == "HUNTER" and (s.rangedSpeed or 0) > 0 then
@@ -388,10 +433,66 @@ function FeralCalc:CreateCharacterPane()
 
     self:UpdateCharacterPaneVisibility()
     self:UpdateCharacterPane()
+    self:LayoutCharacterPane()
+end
+
+function FeralCalc:GetCharacterKey()
+    local name = (type(UnitName) == "function" and UnitName("player")) or "Unknown"
+    local realm = (type(GetRealmName) == "function" and GetRealmName()) or "Realm"
+    return tostring(name) .. "-" .. tostring(realm)
+end
+
+function FeralCalc:GetSectionCollapsed(sectionKey, stats)
+    self:InitDB()
+    local charKey = self:GetCharacterKey()
+    local byChar = self.db.collapsedSectionsByChar
+    if type(byChar) == "table" and type(byChar[charKey]) == "table" and byChar[charKey][sectionKey] ~= nil then
+        return byChar[charKey][sectionKey] and true or false
+    end
+
+    if sectionKey == "mitigation" or sectionKey == "avoidance" then
+        stats = stats or self.lastStats or self:GetMitigationStats()
+        return not self:IsTankSpecByTalents(stats.classFile, stats.talents)
+    end
+    return false
+end
+
+function FeralCalc:LayoutCharacterPane()
+    local pane = self.characterPane
+    if not pane or not pane.sections then
+        return
+    end
+
+    local yOffset = -84
+    for _, sec in ipairs(pane.sections) do
+        local isCollapsed = self:GetSectionCollapsed(sec.key, self.lastStats)
+        yOffset = yOffset - 8
+
+        sec.headerBtn:ClearAllPoints()
+        sec.headerBtn:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
+        if sec.indicator then
+            sec.indicator:SetText(isCollapsed and "|cFFAAAAAA[+]|r" or "|cFFFFD100[-]|r")
+        end
+
+        yOffset = yOffset - 20
+
+        for _, row in ipairs(sec.rows) do
+            if isCollapsed then
+                row:Hide()
+            else
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
+                row:Show()
+                yOffset = yOffset - 18
+            end
+        end
+    end
+
+    pane:SetHeight(math.max(120, -yOffset + 10))
 end
 
 -- ============================================================================
--- STANDALONE MOVABLE TOP-5 SKILL PRIORITY PANE (Toggled only via Slash Command)
+-- STANDALONE MOVABLE TOP-7 SKILL PRIORITY PANE (Toggled only via Slash Command)
 -- ============================================================================
 function FeralCalc:CreatePriorityPane()
     if self.priorityPane then
@@ -401,7 +502,7 @@ function FeralCalc:CreatePriorityPane()
 
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     local pFrame = CreateFrame("Frame", "FeralCalcPriorityPane", UIParent, backdropTemplate)
-    pFrame:SetSize(276, 152)
+    pFrame:SetSize(276, 190)
     pFrame:SetFrameStrata("HIGH")
     pFrame:SetClampedToScreen(true)
     pFrame:SetMovable(true)
@@ -459,7 +560,7 @@ function FeralCalc:CreatePriorityPane()
 
     local title = pFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", pFrame, "TOPLEFT", 14, -12)
-    title:SetText("|cFFFF7D0ATop 5 Skill Priority|r")
+    title:SetText("|cFFFF7D0ATop 7 Skill Priority|r")
     pFrame.title = title
 
     local subHeader = pFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -506,7 +607,7 @@ function FeralCalc:CreatePriorityPane()
     end
 
     local yOffset = -46
-    for i = 1, 5 do
+    for i = 1, 7 do
         local row = CreateFrame("Frame", nil, pFrame)
         row:SetSize(252, 18)
         row:SetPoint("TOPLEFT", pFrame, "TOPLEFT", 12, yOffset)
@@ -597,10 +698,10 @@ function FeralCalc:UpdatePriorityPane()
     local prioList, unitLabel, modeLabel = self:GetSkillPriorityList(s)
 
     if self.priorityPane.title then
-        self.priorityPane.title:SetText(string.format("|cFFFF7D0ATop 5 Priority (%s · %s)|r", unitLabel, modeLabel))
+        self.priorityPane.title:SetText(string.format("|cFFFF7D0ATop 7 Priority (%s · %s)|r", unitLabel, modeLabel))
     end
 
-    for i = 1, 5 do
+    for i = 1, 7 do
         local item = prioList[i]
         local left = self.priorityPane.leftLabels[i]
         local right = self.priorityPane.rightValues[i]
@@ -1022,6 +1123,8 @@ function FeralCalc:UpdateCharacterPane()
             rows.hitCap:SetText(string.format("|cFFFF8040%.1f%% Hit needed|r", s.hitNeededBoss))
         end
     end
+
+    self:LayoutCharacterPane()
 end
 
 -- ============================================================================

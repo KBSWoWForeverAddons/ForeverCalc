@@ -146,8 +146,8 @@ function FeralCalc:CreateOptionsFrame()
 
     AddCheckbox(
         "prioPane",
-        "Top 5 Damage Priority Window",
-        "Show the movable Top 5 DPR/DPE/DPM window (/ft prio).",
+        "Top 7 Damage Priority Window",
+        "Show the movable Top 7 DPR/DPE/DPM window (/ft prio).",
         -112,
         function(checked)
             if FeralCalc.SetPriorityPaneVisible then
@@ -362,7 +362,7 @@ function FeralCalc:CreateMinimapButton()
         GameTooltip:AddLine("Tank · DPS · Caster Stats & Priorities", 0.9, 0.9, 0.9)
         GameTooltip:AddLine(" ")
         GameTooltip:AddDoubleLine("Left-Click:", "Open Options Menu", 1, 0.82, 0, 1, 1, 1)
-        GameTooltip:AddDoubleLine("Right-Click:", "Toggle Top 5 Skill Priority", 1, 0.82, 0, 1, 1, 1)
+        GameTooltip:AddDoubleLine("Right-Click:", "Toggle Top 7 Skill Priority", 1, 0.82, 0, 1, 1, 1)
         GameTooltip:AddDoubleLine("Drag:", "Move Minimap Button", 1, 0.82, 0, 0.8, 0.8, 0.8)
         GameTooltip:Show()
     end)

@@ -52,6 +52,9 @@ function FeralCalc:InitDB()
             FeralCalcDB[k] = v
         end
     end
+    if type(FeralCalcDB.collapsedSectionsByChar) ~= "table" then
+        FeralCalcDB.collapsedSectionsByChar = {}
+    end
     self.db = FeralCalcDB
 end
 
@@ -116,7 +119,7 @@ local function HandleSlashCommand(msg)
     else
         FeralCalc:Print("Commands (Aliases: |cFFFFFF00/fs|r, |cFFFFFF00/ft|r, |cFFFFFF00/fc|r):")
         FeralCalc:Print("  |cFFFFFF00/fs options|r - Open the ForeverStats Options menu")
-        FeralCalc:Print("  |cFFFFFF00/fs prio|r    - Show/hide the movable Top-5 Skill Priority window")
+        FeralCalc:Print("  |cFFFFFF00/fs prio|r    - Show/hide the movable Top-7 Skill Priority window")
         FeralCalc:Print("  |cFFFFFF00/fs threat|r  - Show/hide the movable Top-5 Threat Priority window")
         FeralCalc:Print("  |cFFFFFF00/fs toggle|r  - Show/hide the Character Sheet Stats pane")
         FeralCalc:Print("  |cFFFFFF00/fs armor|r   - Toggle post-armor mitigation preview in spell tooltips")
@@ -395,6 +398,8 @@ function FeralCalc:GetTalentStats()
         impHeroicStrike = 0,
         impThunderClap = 0,
         discovered = {},
+        tabPoints = {},
+        tabNames = {},
     }
 
     local function RecordTalent(tab, index, name, rank, maxRank)
@@ -402,6 +407,9 @@ function FeralCalc:GetTalentStats()
         if not name then return end
         rank = SafeNumber(rank, 0)
         maxRank = SafeNumber(maxRank, 0)
+        if tab and rank > 0 then
+            talents.tabPoints[tab] = (talents.tabPoints[tab] or 0) + rank
+        end
 
         local key = self.TrackedTalentNames[name]
         if not key then
@@ -438,10 +446,24 @@ function FeralCalc:GetTalentStats()
         if type(GetNumTalentTabs) == "function" and type(GetTalentInfo) == "function" then
             local numTabs = SafeNumber(GetNumTalentTabs(), 0)
             for tab = 1, numTabs do
+                local tabApiPts = 0
+                if type(GetTalentTabInfo) == "function" then
+                    local okTab, a, b, c, d, e = pcall(GetTalentTabInfo, tab)
+                    if okTab then
+                        local tabName = SafeString(a) or SafeString(b)
+                        if tabName then
+                            talents.tabNames[tab] = tabName
+                        end
+                        tabApiPts = (type(a) == "string" and SafeNumber(c, 0)) or (type(b) == "string" and SafeNumber(e, 0)) or 0
+                    end
+                end
                 local numTalents = type(GetNumTalents) == "function" and SafeNumber(GetNumTalents(tab), 0) or 0
                 for index = 1, numTalents do
                     local name, _, _, _, rank, maxRank = GetTalentInfo(tab, index)
                     RecordTalent(tab, index, name, rank, maxRank)
+                end
+                if tabApiPts > (talents.tabPoints[tab] or 0) then
+                    talents.tabPoints[tab] = tabApiPts
                 end
             end
         end
@@ -465,6 +487,12 @@ function FeralCalc:GetTalentStats()
                 local okCfg, cfgInfo = pcall(C_Traits.GetConfigInfo, configID)
                 local treeIDs = (okCfg and type(cfgInfo) == "table" and type(cfgInfo.treeIDs) == "table") and cfgInfo.treeIDs or {}
                 for treeIdx, treeID in ipairs(treeIDs) do
+                    if type(C_Traits.GetTreeInfo) == "function" then
+                        local okTree, treeInfo = pcall(C_Traits.GetTreeInfo, configID, treeID)
+                        if okTree and type(treeInfo) == "table" and SafeString(treeInfo.name) then
+                            talents.tabNames[treeIdx] = SafeString(treeInfo.name)
+                        end
+                    end
                     local okNodes, nodeIDs = pcall(C_Traits.GetTreeNodes, treeID)
                     if okNodes and type(nodeIDs) == "table" then
                         for _, nodeID in ipairs(nodeIDs) do
@@ -472,6 +500,16 @@ function FeralCalc:GetTalentStats()
                             if okNode and type(nodeInfo) == "table" then
                                 local rank = SafeNumber(nodeInfo.activeRank or nodeInfo.ranksPurchased, 0)
                                 local maxRank = SafeNumber(nodeInfo.maxRanks, 0)
+                                local tabKey = treeIdx
+                                if SafeNumber(nodeInfo.subTreeID, 0) > 0 then
+                                    tabKey = "sub_" .. tostring(nodeInfo.subTreeID)
+                                    if not talents.tabNames[tabKey] and type(C_Traits.GetSubTreeInfo) == "function" then
+                                        local okSub, subInfo = pcall(C_Traits.GetSubTreeInfo, configID, nodeInfo.subTreeID)
+                                        if okSub and type(subInfo) == "table" and SafeString(subInfo.name) then
+                                            talents.tabNames[tabKey] = SafeString(subInfo.name)
+                                        end
+                                    end
+                                end
                                 local entryID = (type(nodeInfo.activeEntry) == "table" and nodeInfo.activeEntry.entryID)
                                     or (type(nodeInfo.entryIDs) == "table" and nodeInfo.entryIDs[1])
                                 if entryID and maxRank > 0 and type(C_Traits.GetEntryInfo) == "function" and type(C_Traits.GetDefinitionInfo) == "function" then
@@ -480,7 +518,7 @@ function FeralCalc:GetTalentStats()
                                         local okDef, defInfo = pcall(C_Traits.GetDefinitionInfo, entryInfo.definitionID)
                                         if okDef and type(defInfo) == "table" then
                                             local name = SafeString(defInfo.overrideName) or self:GetSpellNameByID(defInfo.spellID)
-                                            RecordTalent(treeIdx, nodeID, name, rank, maxRank)
+                                            RecordTalent(tabKey, nodeID, name, rank, maxRank)
                                         end
                                     end
                                 end
@@ -499,6 +537,136 @@ function FeralCalc:GetTalentStats()
     talents.feralAggressionMod = 1 + (0.03 * (talents.feralAggression or 0))
 
     return talents
+end
+
+-- ============================================================================
+-- TANK SPEC DETECTOR (Enhancement Shaman, Prot Pally, Prot Warrior, Feral Druid)
+-- ============================================================================
+local TANK_TREE_CONFIG = {
+    SHAMAN  = { keyword = "enhancement", fallbackTab = 2 },
+    PALADIN = { keyword = "protection",  fallbackTab = 2 },
+    WARRIOR = { keyword = "protection",  fallbackTab = 3 },
+    DRUID   = { keyword = "feral",       fallbackTab = 2 },
+}
+
+local TANK_TALENT_SIGNATURES = {
+    DRUID = {
+        ["Ferocity"] = true, ["Feral Aggression"] = true, ["Feral Instinct"] = true,
+        ["Brutal Impact"] = true, ["Thick Hide"] = true, ["Feral Swiftness"] = true,
+        ["Feral Charge"] = true, ["Sharpened Claws"] = true, ["Shredding Attacks"] = true,
+        ["Improved Shred"] = true, ["Predatory Strikes"] = true, ["Primal Fury"] = true,
+        ["Savage Fury"] = true, ["Faerie Fire (Feral)"] = true, ["Heart of the Wild"] = true,
+        ["Leader of the Pack"] = true, ["Survival of the Fittest"] = true, ["Mangle"] = true,
+    },
+    WARRIOR = {
+        ["Shield Specialization"] = true, ["Anticipation"] = true, ["Improved Bloodrage"] = true,
+        ["Toughness"] = true, ["Iron Will"] = true, ["Last Stand"] = true,
+        ["Improved Shield Block"] = true, ["Improved Revenge"] = true, ["Defiance"] = true,
+        ["Improved Sunder Armor"] = true, ["Improved Disarm"] = true, ["Improved Taunt"] = true,
+        ["Improved Shield Wall"] = true, ["Concussion Blow"] = true, ["Improved Shield Bash"] = true,
+        ["One-Handed Weapon Specialization"] = true, ["Shield Slam"] = true, ["Devastate"] = true,
+    },
+    PALADIN = {
+        ["Improved Devotion Aura"] = true, ["Redoubt"] = true, ["Precision"] = true,
+        ["Guardian's Favor"] = true, ["Toughness"] = true, ["Blessing of Kings"] = true,
+        ["Improved Righteous Fury"] = true, ["Shield Specialization"] = true, ["Anticipation"] = true,
+        ["Improved Hammer of Justice"] = true, ["Improved Concentration Aura"] = true,
+        ["Blessing of Sanctuary"] = true, ["Reckoning"] = true, ["One-Handed Weapon Specialization"] = true,
+        ["Holy Shield"] = true, ["Ardent Defender"] = true, ["Avenger's Shield"] = true,
+    },
+    SHAMAN = {
+        ["Ancestral Knowledge"] = true, ["Shield Specialization"] = true, ["Guardian Totems"] = true,
+        ["Thundering Strikes"] = true, ["Improved Ghost Wolf"] = true, ["Improved Lightning Shield"] = true,
+        ["Enhancing Totems"] = true, ["Two-Handed Axes and Maces"] = true, ["Anticipation"] = true,
+        ["Flurry"] = true, ["Toughness"] = true, ["Improved Weapon Totems"] = true,
+        ["Elemental Weapons"] = true, ["Parry"] = true, ["Weapon Mastery"] = true,
+        ["Stormstrike"] = true, ["Shamanistic Rage"] = true,
+    },
+}
+
+function FeralCalc:IsTankSpecByTalents(classFile, talents)
+    local cfg = classFile and TANK_TREE_CONFIG[classFile]
+    if not cfg then
+        return false
+    end
+
+    -- 1. Check GetPrimaryTalentTree (Cataclysm / MoP / some Forever builds)
+    if type(GetPrimaryTalentTree) == "function" then
+        local okPrim, primTab = pcall(GetPrimaryTalentTree)
+        if okPrim and SafeNumber(primTab, 0) > 0 then
+            return primTab == cfg.fallbackTab
+        end
+    end
+
+    -- 2. Check Specialization API (C_SpecializationInfo or global GetSpecialization)
+    local getSpec = (C_SpecializationInfo and type(C_SpecializationInfo.GetSpecialization) == "function" and C_SpecializationInfo.GetSpecialization)
+        or (type(GetSpecialization) == "function" and GetSpecialization)
+    local getSpecInfo = (C_SpecializationInfo and type(C_SpecializationInfo.GetSpecializationInfo) == "function" and C_SpecializationInfo.GetSpecializationInfo)
+        or (type(GetSpecializationInfo) == "function" and GetSpecializationInfo)
+    if getSpec and getSpecInfo then
+        local okIdx, specIdx = pcall(getSpec)
+        if okIdx and SafeNumber(specIdx, 0) > 0 then
+            local okInfo, _, specName = pcall(getSpecInfo, specIdx)
+            specName = okInfo and SafeString(specName)
+            if specName and specName:lower():find(cfg.keyword, 1, true) then
+                return true
+            end
+        end
+    end
+
+    talents = talents or self:GetTalentStats()
+    local tabPoints = talents and talents.tabPoints or {}
+    local tabNames = talents and talents.tabNames or {}
+
+    local maxPoints = 0
+    local tabsWithPoints = 0
+    for _, pts in pairs(tabPoints) do
+        if pts > 0 then
+            tabsWithPoints = tabsWithPoints + 1
+        end
+        if pts > maxPoints then
+            maxPoints = pts
+        end
+    end
+
+    if maxPoints > 0 then
+        local targetTab = nil
+        for tab, name in pairs(tabNames) do
+            if type(name) == "string" and name:lower():find(cfg.keyword, 1, true) then
+                targetTab = tab
+                break
+            end
+        end
+
+        -- If multiple tabs exist or tabNames matched the target tree, compare tabPoints directly
+        if targetTab ~= nil or tabsWithPoints > 1 or (tabPoints[cfg.fallbackTab] or 0) > 0 then
+            targetTab = targetTab or cfg.fallbackTab
+            local targetPoints = tabPoints[targetTab] or 0
+            return targetPoints > 0 and targetPoints == maxPoints
+        end
+
+        -- Fallback: C_Traits merged all trees into a single treeID (only 1 tab has points)
+        -- Estimate points in the target tree using discovered talent names.
+        local sigs = TANK_TALENT_SIGNATURES[classFile]
+        if sigs and type(talents.discovered) == "table" then
+            local tankPts = 0
+            local totalPts = 0
+            for _, t in ipairs(talents.discovered) do
+                local r = SafeNumber(t.rank, 0)
+                if r > 0 then
+                    totalPts = totalPts + r
+                    if sigs[t.name] then
+                        tankPts = tankPts + r
+                    end
+                end
+            end
+            if totalPts > 0 and tankPts > (totalPts / 2) then
+                return true
+            end
+        end
+    end
+
+    return false
 end
 
 -- ============================================================================
@@ -2179,6 +2347,12 @@ function FeralCalc:DumpDebugInfo()
     ))
 
     self:Print("--- Discovered Talents ---")
+    local tabSummary = {}
+    for k, pts in pairs(stats.talents.tabPoints or {}) do
+        local tName = (stats.talents.tabNames and stats.talents.tabNames[k]) or ("Tab " .. tostring(k))
+        table.insert(tabSummary, string.format("%s=%d", tName, pts))
+    end
+    self:Print(string.format("  Trees: %s | IsTankSpec=%s", (#tabSummary > 0 and table.concat(tabSummary, ", ") or "none"), tostring(self:IsTankSpecByTalents(stats.classFile, stats.talents))))
     if #stats.talents.discovered == 0 then
         self:Print("  (No active or tracked talents found)")
     else
