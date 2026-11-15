@@ -391,8 +391,14 @@ function FeralCalc:CreateCharacterPane()
         else
             local hitVal = (s.classFile == "HUNTER") and (s.rangedHitPct or s.meleeHitPct) or s.meleeHitPct
             tt:AddDoubleLine("Bonus Melee/Ranged Hit:", string.format("+%.1f%%", hitVal), 1, 1, 1, 0, 1, 0)
-            tt:AddDoubleLine(string.format("Lvl %d Boss Hit Cap (%d Def):", s.bossLevel, s.bossDefense), string.format("9.0%% (8.0%% with %d WS)", s.equalDefense + 5), 1, 1, 1, 1, 0.82, 0)
-            tt:AddDoubleLine(string.format("Lvl %d Mob Hit Cap:", s.playerLevel), "5.0%", 1, 1, 1, 0.8, 0.8, 0.8)
+            if s.isDualWield then
+                tt:AddDoubleLine(string.format("Lvl %d Boss Yellow Cap (%d Def):", s.bossLevel, s.bossDefense), string.format("9.0%% (8.0%% with %d WS)", s.equalDefense + 5), 1, 1, 1, 1, 0.82, 0)
+                tt:AddDoubleLine(string.format("Lvl %d Boss White Cap (DW):", s.bossLevel), string.format("28.0%% (27.0%% with %d WS)", s.equalDefense + 5), 1, 1, 1, 1, 0.82, 0)
+                tt:AddDoubleLine(string.format("Lvl %d Mob Cap (DW White / Yellow):", s.playerLevel), "24.0% / 5.0%", 1, 1, 1, 0.8, 0.8, 0.8)
+            else
+                tt:AddDoubleLine(string.format("Lvl %d Boss Hit Cap (%d Def):", s.bossLevel, s.bossDefense), string.format("9.0%% (8.0%% with %d WS)", s.equalDefense + 5), 1, 1, 1, 1, 0.82, 0)
+                tt:AddDoubleLine(string.format("Lvl %d Mob Hit Cap:", s.playerLevel), "5.0%", 1, 1, 1, 0.8, 0.8, 0.8)
+            end
         end
     end)
 
@@ -408,6 +414,30 @@ function FeralCalc:CreateCharacterPane()
                 tt:AddDoubleLine(string.format("vs Lvl %d Mob (3.0%% Cap):", s.playerLevel), "CAPPED (99% max hit)", 1, 1, 1, 0, 1, 0)
             else
                 tt:AddDoubleLine(string.format("vs Lvl %d Mob (3.0%% Cap):", s.playerLevel), string.format("%.1f%% Spell Hit needed", s.spellHitNeededEqual), 1, 1, 1, 1, 0.82, 0)
+            end
+        elseif s.isDualWield then
+            tt:AddLine("Dual-Wield white attacks (+19% DW miss penalty):", 0.85, 0.85, 0.85)
+            if s.isHitCappedBoss then
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (28.0%% Cap):", s.bossLevel), "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
+            else
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (28.0%% Cap):", s.bossLevel), string.format("%.1f%% Hit needed", s.hitNeededBoss), 1, 1, 1, 1, 0.4, 0.4)
+            end
+            if s.isHitCappedEqual then
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (24.0%% Cap):", s.playerLevel), "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
+            else
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (24.0%% Cap):", s.playerLevel), string.format("%.1f%% Hit needed", s.hitNeededEqual), 1, 1, 1, 1, 0.82, 0)
+            end
+            tt:AddLine(" ")
+            tt:AddLine("Yellow / Special attacks (no DW penalty):", 0.85, 0.85, 0.85)
+            if s.isYellowHitCappedBoss then
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (9.0%% Cap):", s.bossLevel), "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
+            else
+                tt:AddDoubleLine(string.format("vs Lvl %d Boss (9.0%% Cap):", s.bossLevel), string.format("%.1f%% Hit needed", s.yellowHitNeededBoss), 1, 1, 1, 1, 0.4, 0.4)
+            end
+            if s.isYellowHitCappedEqual then
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (5.0%% Cap):", s.playerLevel), "CAPPED (0.0% Miss)", 1, 1, 1, 0, 1, 0)
+            else
+                tt:AddDoubleLine(string.format("vs Lvl %d Mob (5.0%% Cap):", s.playerLevel), string.format("%.1f%% Hit needed", s.yellowHitNeededEqual), 1, 1, 1, 1, 0.82, 0)
             end
         else
             tt:AddLine("Single-wield / Ranged / Shapeshift white & yellow attacks:", 0.85, 0.85, 0.85)
@@ -1098,7 +1128,7 @@ function FeralCalc:UpdateCharacterPane()
         rows.critChance:SetText(string.format("|cFFFFFFFF%.2f%%|r", s.rangedCritPct or s.meleeCritPct))
         rows.hitChance:SetText(string.format("|cFFFFFFFF+%.1f%%|r", s.rangedHitPct or s.meleeHitPct))
         if s.isHitCappedBoss then
-            rows.hitCap:SetText("|cFF00FF00CAPPED (9.0%+)|r")
+            rows.hitCap:SetText(string.format("|cFF00FF00CAPPED (%.1f%%+)|r", s.whiteHitCapBoss or 9.0))
         else
             rows.hitCap:SetText(string.format("|cFFFF8040%.1f%% Hit needed|r", s.hitNeededBoss))
         end
@@ -1118,7 +1148,7 @@ function FeralCalc:UpdateCharacterPane()
         rows.critChance:SetText(string.format("|cFFFFFFFF%.2f%%|r", s.meleeCritPct))
         rows.hitChance:SetText(string.format("|cFFFFFFFF+%.1f%%|r", s.meleeHitPct))
         if s.isHitCappedBoss then
-            rows.hitCap:SetText("|cFF00FF00CAPPED (9.0%+)|r")
+            rows.hitCap:SetText(string.format("|cFF00FF00CAPPED (%.1f%%+)|r", s.whiteHitCapBoss or 9.0))
         else
             rows.hitCap:SetText(string.format("|cFFFF8040%.1f%% Hit needed|r", s.hitNeededBoss))
         end

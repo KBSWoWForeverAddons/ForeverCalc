@@ -746,13 +746,27 @@ function FeralCalc:GetMitigationStats()
     if percentMod <= 0 then percentMod = 1 end
     local avgDmg = (lowDmg + hiDmg) / 2
 
-    local mainSpeed = 0
+    local mainSpeed, offSpeed = 0, 0
     if type(UnitAttackSpeed) == "function" then
-        local ok, spd = pcall(UnitAttackSpeed, "player")
-        if ok then mainSpeed = SafeNumber(spd, 0) end
+        local ok, spd, offSpd = pcall(UnitAttackSpeed, "player")
+        if ok then
+            mainSpeed = SafeNumber(spd, 0)
+            offSpeed = SafeNumber(offSpd, 0)
+        end
     end
     if mainSpeed <= 0 then
         mainSpeed = (formSpeed and formSpeed > 0) and formSpeed or 2.0
+    end
+
+    local isDualWield = false
+    if classFile ~= "DRUID" and classFile ~= "HUNTER" then
+        if type(IsDualWielding) == "function" then
+            local ok, dw = pcall(IsDualWielding)
+            if ok and dw then isDualWield = true end
+        end
+        if not isDualWield and offSpeed > 0 then
+            isDualWield = true
+        end
     end
 
     -- Attack Power
@@ -880,10 +894,16 @@ function FeralCalc:GetMitigationStats()
         local ok, hitBonus = pcall(GetCombatRatingBonus, CR_HIT_MELEE or 6)
         if ok then meleeHitPct = SafeNumber(hitBonus, 0) end
     end
-    local hitNeededBoss = math.max(0, 9.0 - meleeHitPct)
-    local hitNeededEqual = math.max(0, 5.0 - meleeHitPct)
-    local isHitCappedBoss = (meleeHitPct >= 9.0)
-    local isHitCappedEqual = (meleeHitPct >= 5.0)
+    local whiteHitCapBoss = isDualWield and 28.0 or 9.0
+    local whiteHitCapEqual = isDualWield and 24.0 or 5.0
+    local hitNeededBoss = math.max(0, whiteHitCapBoss - meleeHitPct)
+    local hitNeededEqual = math.max(0, whiteHitCapEqual - meleeHitPct)
+    local isHitCappedBoss = (meleeHitPct >= whiteHitCapBoss)
+    local isHitCappedEqual = (meleeHitPct >= whiteHitCapEqual)
+    local yellowHitNeededBoss = math.max(0, 9.0 - meleeHitPct)
+    local yellowHitNeededEqual = math.max(0, 5.0 - meleeHitPct)
+    local isYellowHitCappedBoss = (meleeHitPct >= 9.0)
+    local isYellowHitCappedEqual = (meleeHitPct >= 5.0)
 
     local spellPowerBySchool = {}
     local maxSpellPower = 0
@@ -1047,10 +1067,17 @@ function FeralCalc:GetMitigationStats()
         rangedHitPct = rangedHitPct,
         meleeCritPct = meleeCritPct,
         meleeHitPct = meleeHitPct,
+        isDualWield = isDualWield,
+        whiteHitCapBoss = whiteHitCapBoss,
+        whiteHitCapEqual = whiteHitCapEqual,
         hitNeededBoss = hitNeededBoss,
         hitNeededEqual = hitNeededEqual,
         isHitCappedBoss = isHitCappedBoss,
         isHitCappedEqual = isHitCappedEqual,
+        yellowHitNeededBoss = yellowHitNeededBoss,
+        yellowHitNeededEqual = yellowHitNeededEqual,
+        isYellowHitCappedBoss = isYellowHitCappedBoss,
+        isYellowHitCappedEqual = isYellowHitCappedEqual,
         bossTargetArmorDR = bossTargetArmorDR,
         bossTargetArmorMult = 1 - bossTargetArmorDR,
 
