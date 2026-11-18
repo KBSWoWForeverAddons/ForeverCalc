@@ -94,7 +94,7 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
 
     tooltip:AddLine(" ")
     tooltip:AddDoubleLine(
-        string.format("|cFFFF7D0AForeverStats:|r |cFFFFFFFF%s (Rank %d)|r", data.name, data.rank or 1),
+        string.format("|cFFFF7D0AForeverCalc:|r |cFFFFFFFF%s (Rank %d)|r", data.name, data.rank or 1),
         string.format("|cFFAAAAAA%d %s|r", data.cost or 0, powerLabel)
     )
 
@@ -102,7 +102,9 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
         local isBearSpell = data.type:find("^bear_") ~= nil
         local isCatSpell = data.type:find("^cat_") ~= nil
         if isBearSpell and data.formKey ~= "BEAR" and data.formKey ~= "DIRE_BEAR" then
-            tooltip:AddLine("|cFF888888(Using current form weapon dmg; shift to Bear for 2.5s norm)|r")
+            tooltip:AddLine("|cFF888888(Using current form dmg; Bear normalizes Weapon DPS x 2.50s)|r")
+        elseif isBearSpell then
+            tooltip:AddLine("|cFF888888Bear Norm: Weapon DPS x 2.50s · 14 AP = 1 DPS (+2.5 dmg/hit)|r")
         elseif isCatSpell and data.formKey ~= "CAT" then
             tooltip:AddLine("|cFF888888(Using current form weapon dmg; shift to Cat for 1.0s norm)|r")
         end
@@ -379,14 +381,273 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
     tooltip:Show()
 end
 
-if type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
-    and type(Enum) == "table" and type(Enum.TooltipDataType) == "table" and Enum.TooltipDataType.Spell then
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(tooltip, data)
-        if tooltip == GameTooltip then
-            tooltip.feralCalcLastSpell = nil
-            FeralCalc:AppendSpellTooltip(tooltip, data)
+-- ============================================================================
+-- ITEM TOOLTIP: WEAPON DAMAGE & THREAT COMPARISON VS EQUIPPED
+-- ============================================================================
+local WEAPON_EQUIP_SLOTS = {
+    INVTYPE_WEAPON         = 16,
+    INVTYPE_2HWEAPON       = 16,
+    INVTYPE_WEAPONMAINHAND = 16,
+    INVTYPE_WEAPONOFFHAND  = 17,
+}
+
+local scanTooltip
+local function GetItemTooltipScanner()
+    if not scanTooltip then
+        scanTooltip = CreateFrame("GameTooltip", "FeralCalcItemScanTooltip", UIParent, "GameTooltipTemplate")
+        scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    end
+    return scanTooltip
+end
+
+local function ParseTooltipLinesForWeapon(tt, info)
+    if not tt or not tt.GetName then return end
+    local ttName = tt:GetName()
+    local numLines = tt:NumLines() or 0
+    for i = 2, numLines do
+        local leftFS = _G[ttName .. "TextLeft" .. i]
+        local rightFS = _G[ttName .. "TextRight" .. i]
+        local leftText = leftFS and SafeText(leftFS:GetText())
+        local rightText = rightFS and SafeText(rightFS:GetText())
+
+        if leftText then
+            if info.dps == 0 then
+                local dpsStr = leftText:match("%(%s*([%d%.]+)%s+[Dd]amage [Pp]er [Ss]econd%)")
+                if dpsStr then info.dps = tonumber(dpsStr) or 0 end
+            end
+            if info.minDmg == 0 then
+                local lo, hi = leftText:match("(%d+)%s*%-%s*(%d+)%s+[Dd]amage")
+                if lo and hi then
+                    info.minDmg = tonumber(lo) or 0
+                    info.maxDmg = tonumber(hi) or 0
+                end
+            end
+            if info.equipAP == 0 then
+                local apStr = leftText:match("[Ee]quip:.-%+(%d+)%s+[Aa]ttack [Pp]ower")
+                    or leftText:match("[Ee]quip:.-(%d+)%s+[Aa]ttack [Pp]ower")
+                if apStr then info.equipAP = tonumber(apStr) or 0 end
+            end
+            if info.str == 0 then
+                local s = leftText:match("^%+(%d+)%s+[Ss]trength")
+                if s then info.str = tonumber(s) or 0 end
+            end
+            if info.agi == 0 then
+                local a = leftText:match("^%+(%d+)%s+[Aa]gility")
+                if a then info.agi = tonumber(a) or 0 end
+            end
+            if info.sta == 0 then
+                local st = leftText:match("^%+(%d+)%s+[Ss]tamina")
+                if st then info.sta = tonumber(st) or 0 end
+            end
         end
-    end)
+
+        if rightText and info.speed == 0 then
+            local spdStr = rightText:match("[Ss]peed%s+([%d%.]+)")
+            if spdStr then info.speed = tonumber(spdStr) or 0 end
+        end
+    end
+end
+
+local function ExtractWeaponStats(itemLink, visibleTooltip)
+    local info = {
+        dps = 0,
+        speed = 0,
+        minDmg = 0,
+        maxDmg = 0,
+        ap = 0,
+        equipAP = 0,
+        str = 0,
+        agi = 0,
+        sta = 0,
+    }
+
+    local getItemStats = (C_Item and type(C_Item.GetItemStats) == "function" and C_Item.GetItemStats)
+        or (type(GetItemStats) == "function" and GetItemStats)
+    if getItemStats then
+        local ok, stats = pcall(getItemStats, itemLink)
+        if ok and type(stats) == "table" then
+            info.dps = tonumber(stats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]) or 0
+            info.ap = (tonumber(stats["ITEM_MOD_ATTACK_POWER_SHORT"]) or 0)
+                + (tonumber(stats["ITEM_MOD_FERAL_ATTACK_POWER_SHORT"]) or 0)
+            info.str = tonumber(stats["ITEM_MOD_STRENGTH_SHORT"]) or 0
+            info.agi = tonumber(stats["ITEM_MOD_AGILITY_SHORT"]) or 0
+            info.sta = tonumber(stats["ITEM_MOD_STAMINA_SHORT"]) or 0
+        end
+    end
+
+    if visibleTooltip then
+        ParseTooltipLinesForWeapon(visibleTooltip, info)
+    else
+        local scanner = GetItemTooltipScanner()
+        scanner:ClearLines()
+        scanner:SetHyperlink(itemLink)
+        ParseTooltipLinesForWeapon(scanner, info)
+    end
+
+    if info.ap == 0 and info.equipAP > 0 then
+        info.ap = info.equipAP
+    end
+    if info.dps == 0 and info.minDmg > 0 and info.maxDmg > 0 and info.speed > 0 then
+        info.dps = ((info.minDmg + info.maxDmg) / 2) / info.speed
+    end
+
+    return info
+end
+
+local function FormatDelta(val, unit, decimals)
+    local fmt = decimals and ("%." .. decimals .. "f") or "%.1f"
+    local prefix = (val >= 0) and "+" or ""
+    local color = (val > 0.005) and "|cFF00FF00" or ((val < -0.005) and "|cFFFF5555" or "|cFFAAAAAA")
+    return string.format("%s%s" .. fmt .. "%s|r", color, prefix, val, unit or "")
+end
+
+function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
+    if not tooltip or (tooltip.IsForbidden and tooltip:IsForbidden()) then
+        return
+    end
+    if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then
+        return
+    end
+
+    local itemName, itemLink
+    if type(tooltip.GetItem) == "function" then
+        local ok, iName, iLink = pcall(tooltip.GetItem, tooltip)
+        if ok then
+            itemName = SafeText(iName)
+            itemLink = SafeText(iLink)
+        end
+    end
+    if not itemLink then
+        return
+    end
+
+    if tooltip.feralCalcLastItem == itemLink then
+        return
+    end
+
+    local getItemInfo = (C_Item and type(C_Item.GetItemInfo) == "function" and C_Item.GetItemInfo)
+        or (type(GetItemInfo) == "function" and GetItemInfo)
+    if not getItemInfo then
+        return
+    end
+
+    local okInfo, _, _, _, _, _, _, _, _, equipLoc = pcall(getItemInfo, itemLink)
+    local slotID = okInfo and equipLoc and WEAPON_EQUIP_SLOTS[equipLoc]
+    if not slotID then
+        return
+    end
+
+    local equippedLink = (type(GetInventoryItemLink) == "function") and SafeText(GetInventoryItemLink("player", slotID))
+    if not equippedLink or equippedLink == itemLink then
+        return
+    end
+
+    local newWep = ExtractWeaponStats(itemLink, tooltip)
+    local eqWep = ExtractWeaponStats(equippedLink, nil)
+    if newWep.dps <= 0 or eqWep.dps <= 0 then
+        return
+    end
+
+    tooltip.feralCalcLastItem = itemLink
+
+    local s = self:GetMitigationStats()
+    local classFile = s.classFile
+    local talents = s.talents or {}
+
+    local isCat = (classFile == "DRUID" and s.formKey == "CAT")
+    local isDruid = (classFile == "DRUID")
+
+    local newAP = newWep.ap + (newWep.str * 2) + ((isCat or classFile == "ROGUE") and newWep.agi or 0)
+    local eqAP = eqWep.ap + (eqWep.str * 2) + ((isCat or classFile == "ROGUE") and eqWep.agi or 0)
+
+    local newTotalDPS = newWep.dps + (newAP / 14)
+    local eqTotalDPS = eqWep.dps + (eqAP / 14)
+    local deltaDPS = newTotalDPS - eqTotalDPS
+
+    tooltip:AddLine(" ")
+
+    if isDruid then
+        local normSpeed = isCat and 1.00 or 2.50
+        local modeLabel = isCat and "Cat Paw (1.00s)" or "Bear Paw (2.50s)"
+        local deltaSwing = deltaDPS * normSpeed
+
+        tooltip:AddLine(string.format("|cFFFF7D0AForeverCalc:|r |cFFFFFFFF%s vs Equipped|r", modeLabel))
+        tooltip:AddDoubleLine(
+            "  |cFFFFD100Weapon+AP DPS:|r",
+            string.format("%s |cFFAAAAAA(%s/hit)|r", FormatDelta(deltaDPS, " DPS", 1), FormatDelta(deltaSwing, " Dmg", 1))
+        )
+
+        if not isCat then
+            local bearThreatMult = 1.30 * (1 + 0.03 * (talents.feralInstinct or 0))
+            local deltaTPS = deltaDPS * bearThreatMult
+            local deltaWhiteThreat = deltaSwing * bearThreatMult
+            local deltaMaulThreat = deltaSwing * 1.75 * bearThreatMult
+
+            tooltip:AddDoubleLine(
+                "  |cFFFF8040Bear White Threat:|r",
+                string.format("%s |cFFAAAAAA(%s/hit)|r", FormatDelta(deltaTPS, " TPS", 1), FormatDelta(deltaWhiteThreat, "", 1))
+            )
+            tooltip:AddDoubleLine(
+                "  |cFFFF8040Maul Threat (1.75x):|r",
+                FormatDelta(deltaMaulThreat, " Threat/hit", 1)
+            )
+        end
+    else
+        local newSpeed = (newWep.speed > 0) and newWep.speed or 2.0
+        local eqSpeed = (eqWep.speed > 0) and eqWep.speed or 2.0
+        local deltaSwing = (newTotalDPS * newSpeed) - (eqTotalDPS * eqSpeed)
+
+        tooltip:AddLine("|cFFFF7D0AForeverCalc:|r |cFFFFFFFFWeapon Comparison|r")
+        tooltip:AddDoubleLine(
+            "  |cFFFFD100Weapon+AP DPS:|r",
+            string.format("%s |cFFAAAAAA(%s/swing)|r", FormatDelta(deltaDPS, " DPS", 1), FormatDelta(deltaSwing, " Dmg", 1))
+        )
+
+        if classFile == "WARRIOR" or classFile == "PALADIN" or classFile == "SHAMAN" then
+            local threatMult = 1.0
+            if classFile == "WARRIOR" then
+                threatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
+            elseif classFile == "PALADIN" then
+                threatMult = 1.60 * (1 + 0.1667 * (talents.impRighteousFury or 0))
+            end
+            tooltip:AddDoubleLine(
+                "  |cFFFF8040Tank White Threat:|r",
+                FormatDelta(deltaDPS * threatMult, " TPS", 1)
+            )
+        end
+    end
+
+    local deltaSta = newWep.sta - eqWep.sta
+    if deltaSta ~= 0 then
+        local hotwMult = isDruid and (1 + 0.04 * (talents.heartOfTheWild or 0)) or 1.0
+        local deltaHP = deltaSta * 10 * hotwMult
+        tooltip:AddDoubleLine(
+            "  |cFF00CCFFStamina:|r",
+            string.format("%s |cFFAAAAAA(%s HP)|r", FormatDelta(deltaSta, " Sta", 0), FormatDelta(deltaHP, "", 0))
+        )
+    end
+
+    tooltip:Show()
+end
+
+if type(TooltipDataProcessor) == "table" and type(TooltipDataProcessor.AddTooltipPostCall) == "function"
+    and type(Enum) == "table" and type(Enum.TooltipDataType) == "table" then
+    if Enum.TooltipDataType.Spell then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Spell, function(tooltip, data)
+            if tooltip == GameTooltip then
+                tooltip.feralCalcLastSpell = nil
+                FeralCalc:AppendSpellTooltip(tooltip, data)
+            end
+        end)
+    end
+    if Enum.TooltipDataType.Item then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
+            if tooltip == GameTooltip or tooltip == ItemRefTooltip then
+                tooltip.feralCalcLastItem = nil
+                FeralCalc:AppendItemTooltip(tooltip, data)
+            end
+        end)
+    end
 end
 
 if GameTooltip and GameTooltip.HookScript then
@@ -396,13 +657,38 @@ if GameTooltip and GameTooltip.HookScript then
         end)
     end)
     pcall(function()
+        GameTooltip:HookScript("OnTooltipSetItem", function(self)
+            FeralCalc:AppendItemTooltip(self, nil)
+        end)
+    end)
+    pcall(function()
         GameTooltip:HookScript("OnTooltipCleared", function(self)
             self.feralCalcLastSpell = nil
+            self.feralCalcLastItem = nil
         end)
     end)
     pcall(function()
         GameTooltip:HookScript("OnHide", function(self)
             self.feralCalcLastSpell = nil
+            self.feralCalcLastItem = nil
+        end)
+    end)
+end
+
+if ItemRefTooltip and ItemRefTooltip.HookScript then
+    pcall(function()
+        ItemRefTooltip:HookScript("OnTooltipSetItem", function(self)
+            FeralCalc:AppendItemTooltip(self, nil)
+        end)
+    end)
+    pcall(function()
+        ItemRefTooltip:HookScript("OnTooltipCleared", function(self)
+            self.feralCalcLastItem = nil
+        end)
+    end)
+    pcall(function()
+        ItemRefTooltip:HookScript("OnHide", function(self)
+            self.feralCalcLastItem = nil
         end)
     end)
 end

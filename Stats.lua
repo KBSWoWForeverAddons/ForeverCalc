@@ -35,7 +35,7 @@ local function SafeString(val)
 end
 
 function FeralCalc:Print(msg)
-    local text = "|cFFFF7D0A[ForeverStats]|r " .. tostring(msg)
+    local text = "|cFFFF7D0A[ForeverCalc]|r " .. tostring(msg)
     if DEFAULT_CHAT_FRAME and type(DEFAULT_CHAT_FRAME.AddMessage) == "function" then
         DEFAULT_CHAT_FRAME:AddMessage(text)
     else
@@ -118,7 +118,7 @@ local function HandleSlashCommand(msg)
         end
     else
         FeralCalc:Print("Commands (Aliases: |cFFFFFF00/fs|r, |cFFFFFF00/ft|r, |cFFFFFF00/fc|r):")
-        FeralCalc:Print("  |cFFFFFF00/fs options|r - Open the ForeverStats Options menu")
+        FeralCalc:Print("  |cFFFFFF00/fs options|r - Open the ForeverCalc Options menu")
         FeralCalc:Print("  |cFFFFFF00/fs prio|r    - Show/hide the movable Top-7 Skill Priority window")
         FeralCalc:Print("  |cFFFFFF00/fs threat|r  - Show/hide the movable Top-5 Threat Priority window")
         FeralCalc:Print("  |cFFFFFF00/fs toggle|r  - Show/hide the Character Sheet Stats pane")

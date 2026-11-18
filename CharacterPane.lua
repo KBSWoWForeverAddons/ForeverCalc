@@ -36,7 +36,7 @@ function FeralCalc:CreateCharacterPane()
     end)
     toggleBtn:SetScript("OnEnter", function(btn)
         GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-        GameTooltip:SetText("ForeverStats", 1.0, 0.49, 0.04)
+        GameTooltip:SetText("ForeverCalc", 1.0, 0.49, 0.04)
         GameTooltip:AddLine("Click to toggle mitigation, avoidance, hit/crit caps, and offense stats.", 1, 1, 1, true)
         GameTooltip:Show()
     end)
@@ -79,7 +79,7 @@ function FeralCalc:CreateCharacterPane()
     -- Title Banner
     local titleText = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     titleText:SetPoint("TOP", pane, "TOP", 0, -14)
-    titleText:SetText("|cFFFF7D0AForeverStats|r")
+    titleText:SetText("|cFFFF7D0AForeverCalc|r")
     pane.titleText = titleText
 
     -- Form / Stance & Max HP Subheader Box
@@ -350,8 +350,13 @@ function FeralCalc:CreateCharacterPane()
         end
         tt:AddDoubleLine("Melee Damage:", string.format("%.1f - %.1f (%.2fs)", s.lowDmg, s.hiDmg, s.mainSpeed), 1, 1, 1, 1, 1, 1)
         tt:AddDoubleLine("Average Melee Hit:", string.format("%.1f", s.avgDmg), 1, 1, 1, 1, 0.82, 0)
+        if s.mainSpeed and s.mainSpeed > 0 then
+            tt:AddDoubleLine("Melee Swing DPS:", string.format("%.1f DPS", s.avgDmg / s.mainSpeed), 1, 1, 1, 0.8, 0.8, 0.8)
+        end
         if s.classFile == "DRUID" then
-            tt:AddLine("Bear/Dire Bear normalizes to 2.5s; Cat Form normalizes to 1.0s.", 0.7, 0.7, 0.7, true)
+            tt:AddLine(" ")
+            tt:AddLine("Bear/Dire Bear normalizes swing speed to 2.50s (Cat Form: 1.00s).", 0.85, 0.85, 0.85, true)
+            tt:AddLine("Base Bear paw damage = Listed Weapon DPS x 2.50s (slow weapons compress to 2.50s; 1 Weapon DPS ~= 14 AP).", 0.7, 0.7, 0.7, true)
         end
     end)
 
@@ -371,6 +376,10 @@ function FeralCalc:CreateCharacterPane()
         end
         tt:AddDoubleLine("Melee Attack Power:", FormatNumber(s.totalAP), 1, 1, 1, 1, 0.82, 0)
         tt:AddDoubleLine("Bonus DPS from Melee AP:", string.format("+%.1f DPS", s.totalAP / 14), 1, 1, 1, 0.8, 0.8, 0.8)
+        if s.classFile == "DRUID" then
+            tt:AddDoubleLine("Bonus Bear Paw Hit (2.50s):", string.format("+%.1f Dmg/hit", (s.totalAP / 14) * 2.5), 1, 1, 1, 1, 0.82, 0)
+            tt:AddLine("14 AP = 1 DPS (+2.5 dmg per 2.50s Bear swing; 1 Weapon DPS ~= 14 AP).", 0.7, 0.7, 0.7, true)
+        end
     end)
 
     AddStatRow("critChance", "Melee Crit Chance:", "Critical Strike Chance", function(tt, s)
@@ -1185,7 +1194,7 @@ for _, ev in ipairs(trackedEvents) do
 end
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
-    if event == "ADDON_LOADED" and (arg1 == addonName or arg1 == "ForeverStats" or arg1 == "FeralCalc" or arg1 == "ForeverFeral" or arg1 == "ForeverTank") then
+    if event == "ADDON_LOADED" and (arg1 == addonName or arg1 == "ForeverCalc" or arg1 == "ForeverStats" or arg1 == "FeralCalc" or arg1 == "ForeverFeral" or arg1 == "ForeverTank") then
         FeralCalc:InitDB()
         FeralCalc:RegisterSlashCommands()
         FeralCalc:CreateCharacterPane()

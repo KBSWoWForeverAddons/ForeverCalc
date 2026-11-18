@@ -1,0 +1,13 @@
+## Interface: 11504, 11505, 11506, 11507, 11508, 11509, 16000, 16001
+## Title: ForeverCalc |cFFFF7D0A(Tank · DPS · Caster)|r
+## Notes: Real-time Character Sheet stats pane, DPR/DPE/DPM & Threat ability tooltips, weapon comparisons, and movable Top-7 Skill & Top-5 Threat Priority windows (/fc) for all classes and roles.
+## Author: Antigravity
+## Version: 1.2.0
+## IconTexture: Interface\AddOns\ForeverCalc\ForeverStatsIcon
+## SavedVariables: FeralCalcDB
+
+Data.lua
+Stats.lua
+Tooltips.lua
+CharacterPane.lua
+Minimap.lua
