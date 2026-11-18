@@ -4,6 +4,8 @@
 # in git — this only affects what gets distributed to players.
 
 # Dev tooling & workflow
+.agent/
+.agents/
 .antigravity/
 .github/
 .githooks/
