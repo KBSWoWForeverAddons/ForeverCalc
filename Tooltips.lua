@@ -382,13 +382,39 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
 end
 
 -- ============================================================================
--- ITEM TOOLTIP: WEAPON DAMAGE & THREAT COMPARISON VS EQUIPPED
+-- ITEM TOOLTIP: FULL GEAR UPGRADE PREVIEW (DPS, THREAT, CRIT, DODGE, ARMOR, HP)
 -- ============================================================================
-local WEAPON_EQUIP_SLOTS = {
+local GEAR_EQUIP_SLOTS = {
+    INVTYPE_HEAD           = 1,
+    INVTYPE_NECK           = 2,
+    INVTYPE_SHOULDER       = 3,
+    INVTYPE_CHEST          = 5,
+    INVTYPE_ROBE           = 5,
+    INVTYPE_WAIST          = 6,
+    INVTYPE_LEGS           = 7,
+    INVTYPE_FEET           = 8,
+    INVTYPE_WRIST          = 9,
+    INVTYPE_HAND           = 10,
+    INVTYPE_FINGER         = { 11, 12 },
+    INVTYPE_TRINKET        = { 13, 14 },
+    INVTYPE_CLOAK          = 15,
     INVTYPE_WEAPON         = 16,
     INVTYPE_2HWEAPON       = 16,
     INVTYPE_WEAPONMAINHAND = 16,
     INVTYPE_WEAPONOFFHAND  = 17,
+    INVTYPE_SHIELD         = 17,
+    INVTYPE_HOLDABLE       = 17,
+    INVTYPE_RANGED         = 18,
+    INVTYPE_RANGEDRIGHT    = 18,
+    INVTYPE_THROWN         = 18,
+    INVTYPE_RELIC          = 18,
+}
+
+local WEAPON_EQUIP_LOCS = {
+    INVTYPE_WEAPON         = true,
+    INVTYPE_2HWEAPON       = true,
+    INVTYPE_WEAPONMAINHAND = true,
+    INVTYPE_WEAPONOFFHAND  = true,
 }
 
 local scanTooltip
@@ -400,7 +426,7 @@ local function GetItemTooltipScanner()
     return scanTooltip
 end
 
-local function ParseTooltipLinesForWeapon(tt, info)
+local function ParseTooltipLinesForGear(tt, info)
     if not tt or not tt.GetName then return end
     local ttName = tt:GetName()
     local numLines = tt:NumLines() or 0
@@ -422,6 +448,11 @@ local function ParseTooltipLinesForWeapon(tt, info)
                     info.maxDmg = tonumber(hi) or 0
                 end
             end
+            if info.armor == 0 then
+                local arm = leftText:match("^(%d+)%s+[Aa]rmor$")
+                    or leftText:match("^%+(%d+)%s+[Aa]rmor$")
+                if arm then info.armor = tonumber(arm) or 0 end
+            end
             if info.equipAP == 0 then
                 local apStr = leftText:match("[Ee]quip:.-%+(%d+)%s+[Aa]ttack [Pp]ower")
                     or leftText:match("[Ee]quip:.-(%d+)%s+[Aa]ttack [Pp]ower")
@@ -439,6 +470,35 @@ local function ParseTooltipLinesForWeapon(tt, info)
                 local st = leftText:match("^%+(%d+)%s+[Ss]tamina")
                 if st then info.sta = tonumber(st) or 0 end
             end
+            if info.int == 0 then
+                local iv = leftText:match("^%+(%d+)%s+[Ii]ntellect")
+                if iv then info.int = tonumber(iv) or 0 end
+            end
+            if info.critPct == 0 then
+                local c = leftText:match("critical strike by ([%d%.]+)%%")
+                if c then info.critPct = tonumber(c) or 0 end
+            end
+            if info.dodgePct == 0 then
+                local d = leftText:match("dodge an attack by ([%d%.]+)%%")
+                if d then info.dodgePct = tonumber(d) or 0 end
+            end
+            if info.hitPct == 0 then
+                local h = leftText:match("chance to hit by ([%d%.]+)%%")
+                if h then info.hitPct = tonumber(h) or 0 end
+            end
+            if info.defense == 0 then
+                local def = leftText:match("[Ii]ncreased [Dd]efense %+(%d+)")
+                if def then info.defense = tonumber(def) or 0 end
+            end
+            if info.health == 0 then
+                local hp = leftText:match("^%+(%d+)%s+[Hh]ealth")
+                    or leftText:match("[Ee]quip:.-%+(%d+)%s+[Hh]ealth")
+                if hp then info.health = tonumber(hp) or 0 end
+            end
+            if info.spellPower == 0 then
+                local sp = leftText:match("magical spells and effects by up to (%d+)")
+                if sp then info.spellPower = tonumber(sp) or 0 end
+            end
         end
 
         if rightText and info.speed == 0 then
@@ -448,17 +508,25 @@ local function ParseTooltipLinesForWeapon(tt, info)
     end
 end
 
-local function ExtractWeaponStats(itemLink, visibleTooltip)
+local function ExtractGearStats(itemLink, visibleTooltip)
     local info = {
         dps = 0,
         speed = 0,
         minDmg = 0,
         maxDmg = 0,
+        armor = 0,
         ap = 0,
         equipAP = 0,
         str = 0,
         agi = 0,
         sta = 0,
+        int = 0,
+        critPct = 0,
+        dodgePct = 0,
+        hitPct = 0,
+        defense = 0,
+        health = 0,
+        spellPower = 0,
     }
 
     local getItemStats = (C_Item and type(C_Item.GetItemStats) == "function" and C_Item.GetItemStats)
@@ -467,21 +535,29 @@ local function ExtractWeaponStats(itemLink, visibleTooltip)
         local ok, stats = pcall(getItemStats, itemLink)
         if ok and type(stats) == "table" then
             info.dps = tonumber(stats["ITEM_MOD_DAMAGE_PER_SECOND_SHORT"]) or 0
+            info.armor = tonumber(stats["RESISTANCE0_NAME"] or stats["ITEM_MOD_ARMOR_SHORT"]) or 0
             info.ap = (tonumber(stats["ITEM_MOD_ATTACK_POWER_SHORT"]) or 0)
                 + (tonumber(stats["ITEM_MOD_FERAL_ATTACK_POWER_SHORT"]) or 0)
             info.str = tonumber(stats["ITEM_MOD_STRENGTH_SHORT"]) or 0
             info.agi = tonumber(stats["ITEM_MOD_AGILITY_SHORT"]) or 0
             info.sta = tonumber(stats["ITEM_MOD_STAMINA_SHORT"]) or 0
+            info.int = tonumber(stats["ITEM_MOD_INTELLECT_SHORT"]) or 0
+            info.critPct = tonumber(stats["ITEM_MOD_CRIT_RATING_SHORT"] or stats["ITEM_MOD_CRIT_MELEE_RATING_SHORT"]) or 0
+            info.dodgePct = tonumber(stats["ITEM_MOD_DODGE_RATING_SHORT"]) or 0
+            info.hitPct = tonumber(stats["ITEM_MOD_HIT_RATING_SHORT"] or stats["ITEM_MOD_HIT_MELEE_RATING_SHORT"]) or 0
+            info.defense = tonumber(stats["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"]) or 0
+            info.health = tonumber(stats["ITEM_MOD_HEALTH_SHORT"]) or 0
+            info.spellPower = tonumber(stats["ITEM_MOD_SPELL_POWER_SHORT"] or stats["ITEM_MOD_SPELL_DAMAGE_DONE_SHORT"]) or 0
         end
     end
 
     if visibleTooltip then
-        ParseTooltipLinesForWeapon(visibleTooltip, info)
+        ParseTooltipLinesForGear(visibleTooltip, info)
     else
         local scanner = GetItemTooltipScanner()
         scanner:ClearLines()
         scanner:SetHyperlink(itemLink)
-        ParseTooltipLinesForWeapon(scanner, info)
+        ParseTooltipLinesForGear(scanner, info)
     end
 
     if info.ap == 0 and info.equipAP > 0 then
@@ -532,20 +608,36 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     end
 
     local okInfo, _, _, _, _, _, _, _, _, equipLoc = pcall(getItemInfo, itemLink)
-    local slotID = okInfo and equipLoc and WEAPON_EQUIP_SLOTS[equipLoc]
-    if not slotID then
+    local slotMapping = okInfo and equipLoc and GEAR_EQUIP_SLOTS[equipLoc]
+    if not slotMapping then
         return
     end
 
-    local equippedLink = (type(GetInventoryItemLink) == "function") and SafeText(GetInventoryItemLink("player", slotID))
-    if not equippedLink or equippedLink == itemLink then
-        return
+    local equippedLink
+    if type(slotMapping) == "table" then
+        local link1 = (type(GetInventoryItemLink) == "function") and SafeText(GetInventoryItemLink("player", slotMapping[1]))
+        local link2 = (type(GetInventoryItemLink) == "function") and SafeText(GetInventoryItemLink("player", slotMapping[2]))
+        if link1 == itemLink or link2 == itemLink then
+            return
+        end
+        equippedLink = link1 or link2
+    else
+        equippedLink = (type(GetInventoryItemLink) == "function") and SafeText(GetInventoryItemLink("player", slotMapping))
+        if equippedLink == itemLink then
+            return
+        end
     end
 
-    local newWep = ExtractWeaponStats(itemLink, tooltip)
-    local eqWep = ExtractWeaponStats(equippedLink, nil)
-    if newWep.dps <= 0 or eqWep.dps <= 0 then
-        return
+    local newGear = ExtractGearStats(itemLink, tooltip)
+    local eqGear = equippedLink and ExtractGearStats(equippedLink, nil) or {
+        dps = 0, speed = 0, minDmg = 0, maxDmg = 0, armor = 0,
+        ap = 0, equipAP = 0, str = 0, agi = 0, sta = 0, int = 0,
+        critPct = 0, dodgePct = 0, hitPct = 0, defense = 0, health = 0, spellPower = 0,
+    }
+
+    local isWeapon = WEAPON_EQUIP_LOCS[equipLoc]
+    if isWeapon and (newGear.dps <= 0 or eqGear.dps <= 0) then
+        isWeapon = false
     end
 
     tooltip.feralCalcLastItem = itemLink
@@ -554,15 +646,55 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local classFile = s.classFile
     local talents = s.talents or {}
 
-    local isCat = (classFile == "DRUID" and s.formKey == "CAT")
     local isDruid = (classFile == "DRUID")
+    local isCat = (isDruid and s.formKey == "CAT")
+    local isBear = (isDruid and (s.formKey == "BEAR" or s.formKey == "DIRE_BEAR"))
 
-    local newAP = newWep.ap + (newWep.str * 2) + ((isCat or classFile == "ROGUE") and newWep.agi or 0)
-    local eqAP = eqWep.ap + (eqWep.str * 2) + ((isCat or classFile == "ROGUE") and eqWep.agi or 0)
+    local strToAP = (classFile == "ROGUE" or classFile == "HUNTER") and 1 or 2
+    local agiToAP = (isCat or classFile == "ROGUE" or classFile == "HUNTER") and 1 or 0
+    local newAP = newGear.ap + (newGear.str * strToAP) + (newGear.agi * agiToAP)
+    local eqAP = eqGear.ap + (eqGear.str * strToAP) + (eqGear.agi * agiToAP)
+    local deltaAP = newAP - eqAP
 
-    local newTotalDPS = newWep.dps + (newAP / 14)
-    local eqTotalDPS = eqWep.dps + (eqAP / 14)
+    local newTotalDPS = (isWeapon and newGear.dps or 0) + (newAP / 14)
+    local eqTotalDPS = (isWeapon and eqGear.dps or 0) + (eqAP / 14)
     local deltaDPS = newTotalDPS - eqTotalDPS
+
+    local levelScale = 60 / math.max(10, s.playerLevel or 60)
+    local baseAgiPerCrit = (classFile == "ROGUE") and 29 or ((classFile == "HUNTER") and 53 or 20)
+    local baseAgiPerDodge = (classFile == "ROGUE") and 14.5 or ((classFile == "HUNTER") and 26.5 or 20)
+    local agiToCrit = (1 / baseAgiPerCrit) * levelScale
+    local agiToDodge = (1 / baseAgiPerDodge) * levelScale
+
+    local deltaAgi = newGear.agi - eqGear.agi
+    local deltaSta = newGear.sta - eqGear.sta
+    local deltaDef = newGear.defense - eqGear.defense
+    local deltaHit = newGear.hitPct - eqGear.hitPct
+    local deltaSP = newGear.spellPower - eqGear.spellPower
+
+    local deltaCrit = (newGear.critPct - eqGear.critPct) + (deltaAgi * agiToCrit)
+    local deltaDodge = (newGear.dodgePct - eqGear.dodgePct) + (deltaAgi * agiToDodge) + (deltaDef * 0.04)
+
+    local bearArmorMult = 1.0
+    if s.formKey == "DIRE_BEAR" then
+        bearArmorMult = 4.60 * (1 + 0.02 * (talents.thickHide or 0))
+    elseif s.formKey == "BEAR" then
+        bearArmorMult = 2.80 * (1 + 0.02 * (talents.thickHide or 0))
+    end
+    local deltaBaseArmor = newGear.armor - eqGear.armor
+    local deltaArmor = (deltaBaseArmor * bearArmorMult) + (deltaAgi * 2)
+
+    local hotwMult = isBear and (1 + 0.04 * (talents.heartOfTheWild or 0)) or 1.0
+    local deltaHP = (deltaSta * 10 * hotwMult) + (newGear.health - eqGear.health)
+
+    local hasAnyDelta = (math.abs(deltaDPS) > 0.05) or (math.abs(deltaAP) >= 1)
+        or (math.abs(deltaCrit) > 0.01) or (math.abs(deltaDodge) > 0.01)
+        or (math.abs(deltaArmor) >= 1) or (math.abs(deltaHP) >= 1)
+        or (math.abs(deltaHit) > 0.01) or (math.abs(deltaDef) >= 1)
+        or (math.abs(deltaSP) >= 1)
+    if not hasAnyDelta then
+        return
+    end
 
     tooltip:AddLine(" ")
 
@@ -571,39 +703,48 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
         local modeLabel = isCat and "Cat Paw (1.00s)" or "Bear Paw (2.50s)"
         local deltaSwing = deltaDPS * normSpeed
 
-        tooltip:AddLine(string.format("|cFFFF7D0AForeverCalc:|r |cFFFFFFFF%s vs Equipped|r", modeLabel))
-        tooltip:AddDoubleLine(
-            "  |cFFFFD100Weapon+AP DPS:|r",
-            string.format("%s |cFFAAAAAA(%s/hit)|r", FormatDelta(deltaDPS, " DPS", 1), FormatDelta(deltaSwing, " Dmg", 1))
-        )
+        tooltip:AddLine(string.format("|cFFFF7D0AForeverStats:|r |cFFFFFFFF%s vs Equipped|r", modeLabel))
+        if math.abs(deltaDPS) > 0.05 or math.abs(deltaAP) >= 1 then
+            local dmgLabel = isWeapon and "Weapon+AP DPS:" or "Attack Power / DPS:"
+            local extra = isWeapon and string.format("(%s/hit)", FormatDelta(deltaSwing, " Dmg", 1))
+                or string.format("(%s AP, %s/hit)", FormatDelta(deltaAP, "", 0), FormatDelta(deltaSwing, " Dmg", 1))
+            tooltip:AddDoubleLine(
+                "  |cFFFFD100" .. dmgLabel .. "|r",
+                string.format("%s |cFFAAAAAA%s|r", FormatDelta(deltaDPS, " DPS", 1), extra)
+            )
+        end
 
-        if not isCat then
+        if not isCat and math.abs(deltaDPS) > 0.05 then
             local bearThreatMult = 1.30 * (1 + 0.03 * (talents.feralInstinct or 0))
             local deltaTPS = deltaDPS * bearThreatMult
             local deltaWhiteThreat = deltaSwing * bearThreatMult
-            local deltaMaulThreat = deltaSwing * 1.75 * bearThreatMult
 
             tooltip:AddDoubleLine(
-                "  |cFFFF8040Bear White Threat:|r",
+                "  |cFFFF8040Bear Threat:|r",
                 string.format("%s |cFFAAAAAA(%s/hit)|r", FormatDelta(deltaTPS, " TPS", 1), FormatDelta(deltaWhiteThreat, "", 1))
             )
-            tooltip:AddDoubleLine(
-                "  |cFFFF8040Maul Threat (1.75x):|r",
-                FormatDelta(deltaMaulThreat, " Threat/hit", 1)
-            )
+            if isWeapon then
+                local deltaMaulThreat = deltaSwing * 1.75 * bearThreatMult
+                tooltip:AddDoubleLine(
+                    "  |cFFFF8040Maul Threat (1.75x):|r",
+                    FormatDelta(deltaMaulThreat, " Threat/hit", 1)
+                )
+            end
         end
     else
-        local newSpeed = (newWep.speed > 0) and newWep.speed or 2.0
-        local eqSpeed = (eqWep.speed > 0) and eqWep.speed or 2.0
-        local deltaSwing = (newTotalDPS * newSpeed) - (eqTotalDPS * eqSpeed)
+        local headerLabel = isWeapon and "Weapon Comparison" or "Gear Comparison"
+        tooltip:AddLine(string.format("|cFFFF7D0AForeverStats:|r |cFFFFFFFF%s|r", headerLabel))
+        if math.abs(deltaDPS) > 0.05 or math.abs(deltaAP) >= 1 then
+            local newSpeed = (newGear.speed > 0) and newGear.speed or 2.0
+            local eqSpeed = (eqGear.speed > 0) and eqGear.speed or 2.0
+            local deltaSwing = isWeapon and ((newTotalDPS * newSpeed) - (eqTotalDPS * eqSpeed)) or 0
+            local rightText = isWeapon
+                and string.format("%s |cFFAAAAAA(%s/swing)|r", FormatDelta(deltaDPS, " DPS", 1), FormatDelta(deltaSwing, " Dmg", 1))
+                or string.format("%s |cFFAAAAAA(%s AP)|r", FormatDelta(deltaDPS, " DPS", 1), FormatDelta(deltaAP, "", 0))
+            tooltip:AddDoubleLine("  |cFFFFD100Damage / AP:|r", rightText)
+        end
 
-        tooltip:AddLine("|cFFFF7D0AForeverCalc:|r |cFFFFFFFFWeapon Comparison|r")
-        tooltip:AddDoubleLine(
-            "  |cFFFFD100Weapon+AP DPS:|r",
-            string.format("%s |cFFAAAAAA(%s/swing)|r", FormatDelta(deltaDPS, " DPS", 1), FormatDelta(deltaSwing, " Dmg", 1))
-        )
-
-        if classFile == "WARRIOR" or classFile == "PALADIN" or classFile == "SHAMAN" then
+        if (classFile == "WARRIOR" or classFile == "PALADIN" or classFile == "SHAMAN") and math.abs(deltaDPS) > 0.05 then
             local threatMult = 1.0
             if classFile == "WARRIOR" then
                 threatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
@@ -611,19 +752,37 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
                 threatMult = 1.60 * (1 + 0.1667 * (talents.impRighteousFury or 0))
             end
             tooltip:AddDoubleLine(
-                "  |cFFFF8040Tank White Threat:|r",
+                "  |cFFFF8040Tank Threat:|r",
                 FormatDelta(deltaDPS * threatMult, " TPS", 1)
             )
         end
     end
 
-    local deltaSta = newWep.sta - eqWep.sta
-    if deltaSta ~= 0 then
-        local hotwMult = isDruid and (1 + 0.04 * (talents.heartOfTheWild or 0)) or 1.0
-        local deltaHP = deltaSta * 10 * hotwMult
+    if math.abs(deltaSP) >= 1 then
+        tooltip:AddDoubleLine("  |cFF00CCFFSpell Power:|r", FormatDelta(deltaSP, " SP", 0))
+    end
+    if math.abs(deltaCrit) > 0.01 then
+        tooltip:AddDoubleLine("  |cFFFFCC00Crit Chance:|r", FormatDelta(deltaCrit, "%", 2))
+    end
+    if math.abs(deltaHit) > 0.01 then
+        tooltip:AddDoubleLine("  |cFFFFCC00Hit Chance:|r", FormatDelta(deltaHit, "%", 1))
+    end
+    if math.abs(deltaDodge) > 0.01 then
+        tooltip:AddDoubleLine("  |cFF66FF99Dodge Chance:|r", FormatDelta(deltaDodge, "%", 2))
+    end
+    if math.abs(deltaDef) >= 1 then
+        tooltip:AddDoubleLine("  |cFF66FF99Defense:|r", FormatDelta(deltaDef, " Def", 0))
+    end
+    if math.abs(deltaArmor) >= 1 then
+        local armorText = (bearArmorMult > 1.0 and math.abs(deltaBaseArmor) >= 1)
+            and string.format("%s |cFFAAAAAA(%s base)|r", FormatDelta(deltaArmor, " Armor", 0), FormatDelta(deltaBaseArmor, "", 0))
+            or FormatDelta(deltaArmor, " Armor", 0)
+        tooltip:AddDoubleLine("  |cFFCCCCCCArmor:|r", armorText)
+    end
+    if math.abs(deltaHP) >= 1 then
         tooltip:AddDoubleLine(
-            "  |cFF00CCFFStamina:|r",
-            string.format("%s |cFFAAAAAA(%s HP)|r", FormatDelta(deltaSta, " Sta", 0), FormatDelta(deltaHP, "", 0))
+            "  |cFF00CCFFHitpoints:|r",
+            string.format("%s |cFFAAAAAA(%s Sta)|r", FormatDelta(deltaHP, " HP", 0), FormatDelta(deltaSta, "", 0))
         )
     end
 
