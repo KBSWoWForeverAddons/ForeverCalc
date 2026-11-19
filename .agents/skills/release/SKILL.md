@@ -22,12 +22,16 @@ Automates tagging and pushing a new release of **ForeverCalc** to GitHub, which 
    - If the user provided a version (e.g., `/release 1.2.1` or `/release v1.2.1`), strip any leading `v` for `ForeverCalc.toc` and use `v<version>` for the git tag.
    - If no version was provided, suggest the next semantic version based on the current `## Version:` and recent commits (e.g., patch bump for fixes, minor bump for features) and confirm with the user.
 
-3. **Update Version Metadata**:
+3. **Update Version Metadata & Changelog**:
    - Update `## Version: <version>` in `ForeverCalc.toc`.
    - If `README.md` mentions the version badge/text (e.g., ``(`v1.2.0`)``), update it to match `v<version>`.
-   - Stage and commit the version bump if any files changed:
+   - Generate a clean, player-friendly changelog entry in `CHANGELOG.md` (creating the file if it does not exist) from all commits since the previous tag (`git log <last-tag>..HEAD --oneline`, or `git log --oneline` if no tag exists):
+     - Prepend a new section `## [v<version>] - YYYY-MM-DD` at the top of `CHANGELOG.md` (below the `# Changelog` header).
+     - Group changes under concise headings (**Added**, **Changed**, **Fixed** — omit any empty section) written clearly for WoW players, without raw commit hashes.
+     - Note: `.github/workflows/release.yml` automatically passes `CHANGELOG.md` to `BigWigsMods/packager@v2` via `manual-changelog` in `.pkgmeta` for CurseForge and GitHub Releases.
+   - Stage and commit the version bump and changelog:
      ```powershell
-     git add ForeverCalc.toc README.md
+     git add ForeverCalc.toc README.md CHANGELOG.md
      git commit -m "Release v<version>"
      ```
 

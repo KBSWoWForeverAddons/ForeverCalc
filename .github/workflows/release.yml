@@ -101,7 +101,15 @@ jobs:
               if not any(rx.search(rel) for rx in git_wl) and any(rx.search(rel) for rx in git_bl):
                   ignored_paths.add(rel)
 
-          lines = ["package-as: ForeverCalc", "", "ignore:"]
+          lines = ["package-as: ForeverCalc", ""]
+          if (root / "CHANGELOG.md").exists():
+              lines.extend([
+                  "manual-changelog:",
+                  "  filename: CHANGELOG.md",
+                  "  markup-type: markdown",
+                  "",
+              ])
+          lines.append("ignore:")
           for item in sorted(ignored_paths):
               lines.append(f"  - {item}")
           # Also ignore dot-directories at top level in case empty/nested
