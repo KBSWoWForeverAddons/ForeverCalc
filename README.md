@@ -1,6 +1,6 @@
 # ForeverCalc
 
-**ForeverCalc** (`v1.2.0`) is a World of Warcraft Classic / Forever addon for **Tank · DPS · Caster** role stat analysis, priority panes, item tooltips, and character-pane breakdowns.
+**ForeverCalc** (`v1.2.1`) is a World of Warcraft Classic / Forever addon for **Tank · DPS · Caster** role stat analysis, priority panes, item tooltips, and character-pane breakdowns.
 
 ## Features
 
