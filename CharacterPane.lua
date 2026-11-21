@@ -287,7 +287,8 @@ function FeralCalc:CreateCharacterPane()
         if s.canParry then
             tt:AddDoubleLine("Exact Parry:", string.format("%.2f%%", s.parryPct), 1, 1, 1, 1, 1, 1)
         else
-            tt:AddLine("Druids cannot Parry attacks.", 0.7, 0.7, 0.7, true)
+            local msg = (s.classFile == "DRUID") and "Druids cannot Parry attacks." or "This class cannot Parry attacks."
+            tt:AddLine(msg, 0.7, 0.7, 0.7, true)
         end
     end)
 
@@ -395,11 +396,18 @@ function FeralCalc:CreateCharacterPane()
     AddStatRow("hitChance", "Bonus Melee Hit:", "Bonus Hit Chance", function(tt, s)
         if s.isCaster then
             tt:AddDoubleLine("Bonus Spell Hit:", string.format("+%.1f%%", s.spellHitPct or 0), 1, 1, 1, 0, 1, 0)
+            if (s.talentSpellHit or 0) > 0 then
+                tt:AddDoubleLine("  From Talents:", string.format("+%.1f%%", s.talentSpellHit), 0.8, 0.8, 0.8, 0.4, 0.8, 1)
+            end
             tt:AddDoubleLine(string.format("Lvl %d Boss Spell Hit Cap:", s.bossLevel), "16.0% (1% min resist)", 1, 1, 1, 1, 0.82, 0)
             tt:AddDoubleLine(string.format("Lvl %d Mob Spell Hit Cap:", s.playerLevel), "3.0% (1% min resist)", 1, 1, 1, 0.8, 0.8, 0.8)
         else
             local hitVal = (s.classFile == "HUNTER") and (s.rangedHitPct or s.meleeHitPct) or s.meleeHitPct
+            local talHit = (s.classFile == "HUNTER") and (s.talentRangedHit or 0) or (s.talentMeleeHit or 0)
             tt:AddDoubleLine("Bonus Melee/Ranged Hit:", string.format("+%.1f%%", hitVal), 1, 1, 1, 0, 1, 0)
+            if talHit > 0 then
+                tt:AddDoubleLine("  From Talents:", string.format("+%.1f%%", talHit), 0.8, 0.8, 0.8, 0.4, 0.8, 1)
+            end
             if s.isDualWield then
                 tt:AddDoubleLine(string.format("Lvl %d Boss Yellow Cap (%d Def):", s.bossLevel, s.bossDefense), string.format("9.0%% (8.0%% with %d WS)", s.equalDefense + 5), 1, 1, 1, 1, 0.82, 0)
                 tt:AddDoubleLine(string.format("Lvl %d Boss White Cap (DW):", s.bossLevel), string.format("28.0%% (27.0%% with %d WS)", s.equalDefense + 5), 1, 1, 1, 1, 0.82, 0)

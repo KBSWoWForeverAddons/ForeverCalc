@@ -397,6 +397,14 @@ function FeralCalc:GetTalentStats()
         oneHandSpec = 0,
         impHeroicStrike = 0,
         impThunderClap = 0,
+        precision = 0,
+        naturesGuidance = 0,
+        surefooted = 0,
+        elementalPrecision = 0,
+        arcaneFocus = 0,
+        suppression = 0,
+        shadowFocus = 0,
+        balanceOfPower = 0,
         discovered = {},
         tabPoints = {},
         tabNames = {},
@@ -731,7 +739,7 @@ function FeralCalc:GetMitigationStats()
     stanceDmgMult = stanceDmgMult or 1.0
     local talents = self:GetTalentStats()
 
-    local canParry = (classFile ~= "DRUID" and classFile ~= "SHAMAN" and classFile ~= "PRIEST" and classFile ~= "MAGE" and classFile ~= "WARLOCK")
+    local canParry = (classFile ~= "DRUID" and classFile ~= "PRIEST" and classFile ~= "MAGE" and classFile ~= "WARLOCK")
     local canBlock = (classFile == "WARRIOR" or classFile == "PALADIN" or classFile == "SHAMAN")
 
     -- Weapon Damage
@@ -885,15 +893,20 @@ function FeralCalc:GetMitigationStats()
         local ok, c = pcall(GetCritChance)
         if ok then meleeCritPct = SafeNumber(c, 0) end
     end
-    local meleeHitPct = 0
+    local hitMod = 0
     if type(GetHitModifier) == "function" then
         local ok, h = pcall(GetHitModifier)
-        if ok then meleeHitPct = SafeNumber(h, 0) end
+        if ok then hitMod = SafeNumber(h, 0) end
     end
-    if meleeHitPct == 0 and type(GetCombatRatingBonus) == "function" then
+    local meleeHitRating = 0
+    if type(GetCombatRatingBonus) == "function" then
         local ok, hitBonus = pcall(GetCombatRatingBonus, CR_HIT_MELEE or 6)
-        if ok then meleeHitPct = SafeNumber(hitBonus, 0) end
+        if ok then meleeHitRating = SafeNumber(hitBonus, 0) end
     end
+    local talentMeleeHit = (talents.precision or 0) * 1.0
+        + (talents.naturesGuidance or 0) * 1.0
+        + (talents.surefooted or 0) * 1.0
+    local meleeHitPct = math.max(hitMod, meleeHitRating) + talentMeleeHit
     local whiteHitCapBoss = isDualWield and 28.0 or 9.0
     local whiteHitCapEqual = isDualWield and 24.0 or 5.0
     local hitNeededBoss = math.max(0, whiteHitCapBoss - meleeHitPct)
@@ -931,17 +944,27 @@ function FeralCalc:GetMitigationStats()
     end
     if spellCritPct <= 0 then spellCritPct = meleeCritPct end
 
-    local spellHitPct = 0
+    local spellHitMod = 0
     if type(GetSpellHitModifier) == "function" then
         local ok, sh = pcall(GetSpellHitModifier)
-        if ok then spellHitPct = SafeNumber(sh, 0) end
+        if ok then spellHitMod = SafeNumber(sh, 0) end
     end
+    local spellHitRating = 0
     if type(GetCombatRatingBonus) == "function" then
         local ok, shBonus = pcall(GetCombatRatingBonus, CR_HIT_SPELL or 8)
-        if ok and SafeNumber(shBonus, 0) > spellHitPct then
-            spellHitPct = SafeNumber(shBonus, 0)
-        end
+        if ok then spellHitRating = SafeNumber(shBonus, 0) end
     end
+    local universalSpellHit = ((classFile == "PALADIN") and (talents.precision or 0) or 0)
+        + (talents.naturesGuidance or 0) * 1.0
+        + (talents.balanceOfPower or 0) * 2.0
+    local schoolSpellHit = math.max(
+        (talents.elementalPrecision or 0) * 2.0,
+        (talents.arcaneFocus or 0) * 2.0,
+        (talents.suppression or 0) * 2.0,
+        (talents.shadowFocus or 0) * 2.0
+    )
+    local talentSpellHit = universalSpellHit + schoolSpellHit
+    local spellHitPct = math.max(spellHitMod, spellHitRating) + talentSpellHit
     local spellHitNeededBoss = math.max(0, 16.0 - spellHitPct)
     local spellHitNeededEqual = math.max(0, 3.0 - spellHitPct)
     local isSpellHitCappedBoss = (spellHitPct >= 16.0)
@@ -953,13 +976,13 @@ function FeralCalc:GetMitigationStats()
         local ok, rc = pcall(GetRangedCritChance)
         if ok and SafeNumber(rc, 0) > 0 then rangedCritPct = SafeNumber(rc, 0) end
     end
-    local rangedHitPct = meleeHitPct
+    local rangedHitRating = 0
     if type(GetCombatRatingBonus) == "function" then
         local ok, rhBonus = pcall(GetCombatRatingBonus, CR_HIT_RANGED or 7)
-        if ok and SafeNumber(rhBonus, 0) > rangedHitPct then
-            rangedHitPct = SafeNumber(rhBonus, 0)
-        end
+        if ok then rangedHitRating = SafeNumber(rhBonus, 0) end
     end
+    local talentRangedHit = (talents.surefooted or 0) * 1.0
+    local rangedHitPct = math.max(hitMod, rangedHitRating) + talentRangedHit
     local rangedSpeed, rangedLow, rangedHi = 0, 0, 0
     if type(UnitRangedDamage) == "function" then
         local ok, rSpd, rLow, rHi = pcall(UnitRangedDamage, "player")
@@ -1059,14 +1082,17 @@ function FeralCalc:GetMitigationStats()
         isCaster = isCaster,
         spellCritPct = spellCritPct,
         spellHitPct = spellHitPct,
+        talentSpellHit = talentSpellHit,
         spellHitNeededBoss = spellHitNeededBoss,
         spellHitNeededEqual = spellHitNeededEqual,
         isSpellHitCappedBoss = isSpellHitCappedBoss,
         isSpellHitCappedEqual = isSpellHitCappedEqual,
         rangedCritPct = rangedCritPct,
         rangedHitPct = rangedHitPct,
+        talentRangedHit = talentRangedHit,
         meleeCritPct = meleeCritPct,
         meleeHitPct = meleeHitPct,
+        talentMeleeHit = talentMeleeHit,
         isDualWield = isDualWield,
         whiteHitCapBoss = whiteHitCapBoss,
         whiteHitCapEqual = whiteHitCapEqual,

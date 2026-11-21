@@ -54,6 +54,16 @@ FeralCalc.TrackedTalentNames = {
     -- Paladin Talents
     ["Improved Righteous Fury"] = "impRighteousFury",  -- +16%/33%/50% Righteous Fury threat bonus
     ["Redoubt"]                 = "redoubt",
+    ["Precision"]               = "precision",         -- +1%/rank Melee Hit (Rogue) or Melee & Spell Hit (Paladin)
+
+    -- Shaman, Hunter & Caster Hit Talents
+    ["Nature's Guidance"]       = "naturesGuidance",   -- +1%/2%/3% Melee & Spell Hit (Shaman)
+    ["Surefooted"]              = "surefooted",        -- +1%/2%/3% Melee & Ranged Hit (Hunter)
+    ["Elemental Precision"]     = "elementalPrecision",-- +2%/4%/6% Frost/Fire/Ele Spell Hit (Mage/Shaman)
+    ["Arcane Focus"]            = "arcaneFocus",       -- +2%/4%/6%/8%/10% Arcane Spell Hit (Mage)
+    ["Suppression"]             = "suppression",       -- +2%/4%/6%/8%/10% Affliction Spell Hit (Warlock)
+    ["Shadow Focus"]            = "shadowFocus",       -- +2%/4%/6%/8%/10% Shadow Spell Hit (Priest)
+    ["Balance of Power"]        = "balanceOfPower",    -- +2%/4% Spell Hit (Druid)
 }
 
 -- ============================================================================
