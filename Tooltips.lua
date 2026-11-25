@@ -92,6 +92,17 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
     local powerLabel = (data.powerType == "RAGE") and "Rage" or ((data.powerType == "MANA") and "Mana" or "Energy")
     local effLabel = (data.powerType == "RAGE") and "DPR" or ((data.powerType == "MANA") and "DPM" or "DPE")
 
+    local function AddRFThreatLine(baseDmg)
+        if data.classFile == "PALADIN" and data.rfHolyMult and data.rfHolyMult > 1.0 then
+            local rfThreat = (baseDmg or 0) * data.rfHolyMult
+            local tpm = ((data.cost or 0) > 0) and (rfThreat / data.cost) or 0
+            tooltip:AddDoubleLine(
+                "  |cFFFF8040Righteous Fury Threat:|r",
+                string.format("|cFFFF8040%s Threat|r (|cFFFFCC00%.2f TPM|r)", FormatInt(rfThreat), tpm)
+            )
+        end
+    end
+
     tooltip:AddLine(" ")
     tooltip:AddDoubleLine(
         string.format("|cFFFF7D0AForeverCalc:|r |cFFFFFFFF%s (Rank %d)|r", data.name, data.rank or 1),
@@ -344,6 +355,7 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
             and "|cFF00FF00UNCRUSHABLE (102.4%+)|r"
             or string.format("|cFFFFCC80%.1f%% / 102.4%%|r", data.newCombatTablePct)
         tooltip:AddDoubleLine("  |cFF00FF00Combat Table w/ Holy Shield:|r", crushState)
+        AddRFThreatLine((data.totalAllCharges or 0) * 1.20)
 
     -- 8. PALADIN CONSECRATION (Damage Per Mana: 1T / 3T / 5T)
     elseif data.type == "pal_consecration" then
@@ -359,8 +371,28 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
             "  |cFF00CCFFDamage Per Mana (DPM):|r",
             string.format("|cFF00CCFF%.2f|r (1T) / |cFF00FF00%.2f|r (3T) / |cFF00FF00%.2f|r (5T)", data.dpm1 or 0, data.dpm3 or 0, data.dpm5 or 0)
         )
+        AddRFThreatLine(data.totalHoly)
 
-    -- 9. PALADIN SEALS (Seal of Righteousness / Seal of Command)
+    -- 9. PALADIN SEALS (Seal of Fury / Seal of Righteousness / Seal of Command)
+    elseif data.type == "pal_seal_sof" then
+        tooltip:AddDoubleLine(
+            "  |cFFFFD100Per Swing Holy:|r",
+            string.format("|cFFFFFFFF%s|r (%.0f swings = |cFF00FF00%s|r)", FormatDec(data.perHit), data.hits or 15, FormatInt(data.totalDmg))
+        )
+        tooltip:AddDoubleLine(
+            "  |cFF66CCFFShield Absorb (50%):|r",
+            string.format("|cFF66CCFF%s/swing|r (|cFF66CCFF%s|r over 30s)", FormatDec(data.absorbPerHit), FormatInt(data.totalAbsorb))
+        )
+        tooltip:AddDoubleLine(
+            "  |cFFFFD100Judgement (3s Taunt):|r",
+            string.format("|cFFFFFFFF%s - %s|r |cFFAAAAAA(Avg: %s)|r", FormatInt(data.judgeMin), FormatInt(data.judgeMax), FormatInt(data.judgeAvg))
+        )
+        tooltip:AddDoubleLine(
+            "  |cFF00CCFFDamage Per Mana (DPM):|r",
+            string.format("|cFF00CCFF%.2f Dmg / Mana|r (30s total)", data.dpm or 0)
+        )
+        AddRFThreatLine(data.totalDmg)
+
     elseif data.type == "pal_seal_sor" or data.type == "pal_seal_soc" then
         local procLabel = (data.type == "pal_seal_soc") and "Per Proc (70% Wpn):" or "Per Swing Holy:"
         local countLabel = (data.type == "pal_seal_soc") and string.format("%.1f procs", data.hits or 3.5) or string.format("%.0f swings", data.hits or 15)
@@ -376,6 +408,7 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
             "  |cFF00CCFFDamage Per Mana (DPM):|r",
             string.format("|cFF00CCFF%.2f Dmg / Mana|r (30s total)", data.dpm or 0)
         )
+        AddRFThreatLine(data.totalDmg)
 
     -- 10. DIRECT SPELL NUKES & JUDGEMENT (Paladin, Shaman, Warlock, Mage, Priest, Balance Druid)
     elseif data.type == "pal_holy_nuke" or data.type == "pal_judgement" or data.type == "spell_nuke" then
@@ -396,6 +429,7 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
             "  |cFF00CCFFDamage Per Mana (DPM):|r",
             string.format("|cFF00CCFF%.2f Dmg / Mana|r", data.dpm or 0)
         )
+        AddRFThreatLine(data.avgDmg)
     end
 
     tooltip:Show()
@@ -769,7 +803,7 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
             if classFile == "WARRIOR" then
                 threatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
             elseif classFile == "PALADIN" then
-                threatMult = 1.60 * (1 + 0.1667 * (talents.impRighteousFury or 0))
+                threatMult = (s.formKey == "PALADIN_RF") and 1.33 or 1.0
             end
             tooltip:AddDoubleLine(
                 "  |cFFFF8040Tank Threat:|r",

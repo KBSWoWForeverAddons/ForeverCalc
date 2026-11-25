@@ -288,6 +288,9 @@ FeralCalc.SpellData = {
     [20918] = { name = "Seal of Command", rank = 3, type = "pal_seal_soc", jMin = 101, jMax = 117, duration = 30, procsPerMin = 7, baseCost = 140, powerType = "MANA" },
     [20919] = { name = "Seal of Command", rank = 4, type = "pal_seal_soc", jMin = 132, jMax = 152, duration = 30, procsPerMin = 7, baseCost = 180, powerType = "MANA" },
     [20920] = { name = "Seal of Command", rank = 5, type = "pal_seal_soc", jMin = 169, jMax = 187, duration = 30, procsPerMin = 7, baseCost = 210, powerType = "MANA" },
+
+    -- SEAL OF FURY (WoW Forever): +Holy dmg per swing (50% absorb w/ shield) + Judgement Taunt (3s)
+    [1311649] = { name = "Seal of Fury", rank = 1, type = "pal_seal_sof", flatPerHit = 6, jMin = 29, jMax = 32, absorbPct = 0.50, duration = 30, baseCost = 40, powerType = "MANA" },
 }
 
 -- ============================================================================
