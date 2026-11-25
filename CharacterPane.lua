@@ -379,6 +379,25 @@ function FeralCalc:CreateCharacterPane()
         if s.mainSpeed and s.mainSpeed > 0 then
             tt:AddDoubleLine("Melee Swing DPS:", string.format("%.1f DPS", s.avgDmg / s.mainSpeed), 1, 1, 1, 0.8, 0.8, 0.8)
         end
+        local function ShowEnchantLine(slotLabel, ench)
+            if not ench then return end
+            if (ench.procDPS or 0) > 0 then
+                local mult = s.enchantThreatMult or 1.0
+                tt:AddDoubleLine(
+                    string.format("%s Enchant (%s):", slotLabel, ench.name),
+                    string.format("+%.1f DPS (+%.1f TPS)", ench.procDPS, ench.procDPS * mult),
+                    1, 1, 1, 1, 0.5, 0.2
+                )
+            elseif (ench.flatDmg or 0) > 0 then
+                tt:AddDoubleLine(
+                    string.format("%s Enchant:", slotLabel),
+                    string.format("+%d Wpn Dmg (in melee dmg)", ench.flatDmg),
+                    1, 1, 1, 0.6, 0.9, 1
+                )
+            end
+        end
+        ShowEnchantLine("MH", s.mhEnchant)
+        ShowEnchantLine("OH", s.ohEnchant)
         if s.classFile == "DRUID" then
             tt:AddLine(" ")
             tt:AddLine("Bear/Dire Bear normalizes swing speed to 2.50s (Cat Form: 1.00s).", 0.85, 0.85, 0.85, true)

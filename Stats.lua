@@ -409,6 +409,67 @@ function FeralCalc:GetRighteousFuryMultipliers(talents)
     return rfAllMult, rfHolyMult
 end
 
+local enchantScanner
+local KNOWN_WEAPON_ENCHANTS = {
+    ["803"]  = { name = "Fiery Weapon",  procDPS = 4.0,  flatDmg = 0, ignoresArmor = true },
+    ["1898"] = { name = "Lifestealing",  procDPS = 3.0,  flatDmg = 0, ignoresArmor = true },
+    ["1900"] = { name = "Crusader",      procDPS = 3.57, flatDmg = 0, ignoresArmor = false },
+    ["249"]  = { name = "Minor Striking",   procDPS = 0, flatDmg = 1, ignoresArmor = false },
+    ["250"]  = { name = "Lesser Striking",  procDPS = 0, flatDmg = 2, ignoresArmor = false },
+    ["241"]  = { name = "Striking",         procDPS = 0, flatDmg = 3, ignoresArmor = false },
+    ["1897"] = { name = "Greater Striking", procDPS = 0, flatDmg = 4, ignoresArmor = false },
+    ["853"]  = { name = "Superior Striking",procDPS = 0, flatDmg = 5, ignoresArmor = false },
+    ["943"]  = { name = "Minor Impact",     procDPS = 0, flatDmg = 2, ignoresArmor = false },
+    ["1896"] = { name = "Greater Impact",   procDPS = 0, flatDmg = 7, ignoresArmor = false },
+}
+
+function FeralCalc:GetWeaponEnchantBonus(itemLink)
+    local link = SafeString(itemLink)
+    if not link then return nil end
+
+    local enchID = link:match("item:%d+:(%d+)")
+    if enchID and KNOWN_WEAPON_ENCHANTS[enchID] then
+        local e = KNOWN_WEAPON_ENCHANTS[enchID]
+        return { name = e.name, procDPS = e.procDPS, flatDmg = e.flatDmg, ignoresArmor = e.ignoresArmor }
+    end
+
+    if type(CreateFrame) == "function" and UIParent then
+        if not enchantScanner then
+            enchantScanner = CreateFrame("GameTooltip", "FeralCalcEnchantScanner", UIParent, "GameTooltipTemplate")
+            enchantScanner:SetOwner(UIParent, "ANCHOR_NONE")
+        end
+        enchantScanner:ClearLines()
+        local ok = pcall(enchantScanner.SetHyperlink, enchantScanner, link)
+        if ok then
+            local numLines = enchantScanner:NumLines() or 0
+            for i = 2, numLines do
+                local fs = _G["FeralCalcEnchantScannerTextLeft" .. i]
+                local txt = fs and SafeString(fs:GetText())
+                if txt and txt ~= "" then
+                    local low = txt:lower()
+                    if low:find("fiery weapon", 1, true) then
+                        return { name = "Fiery Weapon", procDPS = 4.0, flatDmg = 0, ignoresArmor = true }
+                    elseif low:find("lifestealing", 1, true) then
+                        return { name = "Lifestealing", procDPS = 3.0, flatDmg = 0, ignoresArmor = true }
+                    elseif low:find("crusader", 1, true) then
+                        return { name = "Crusader", procDPS = 3.57, flatDmg = 0, ignoresArmor = false }
+                    end
+                    local flatStr = txt:match("%+(%d+)%s+[Ww]eapon [Dd]amage")
+                        or txt:match("[Ww]eapon [Dd]amage%s*%+(%d+)")
+                    if flatStr then
+                        local flat = tonumber(flatStr) or 0
+                        if flat > 0 then
+                            return { name = string.format("+%d Weapon Dmg", flat), procDPS = 0, flatDmg = flat, ignoresArmor = false }
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
 function FeralCalc:GetCurrentForm()
     local classFile = self:GetPlayerClass()
     local formIndex = 0
@@ -1112,6 +1173,31 @@ function FeralCalc:GetMitigationStats()
     local bossArmor = (bossLevel >= 63) and C.BOSS_ARMOR or math.floor(C.BOSS_ARMOR * (bossLevel / 63) + 0.5)
     local bossTargetArmorDR = bossArmor / (bossArmor + 400 + 85 * playerLevel)
 
+    -- Equipped Weapon Enchants (Fiery Weapon, Lifestealing, Crusader, +Weapon Damage)
+    local mhLink = (type(GetInventoryItemLink) == "function") and SafeString(GetInventoryItemLink("player", 16))
+    local ohLink = (type(GetInventoryItemLink) == "function") and SafeString(GetInventoryItemLink("player", 17))
+    local mhEnchant = mhLink and self:GetWeaponEnchantBonus(mhLink) or nil
+    local ohEnchant = ohLink and self:GetWeaponEnchantBonus(ohLink) or nil
+
+    local enchantProcDPS = 0
+    local function AddEnchantDPS(ench)
+        if not ench or (ench.procDPS or 0) <= 0 then return end
+        local mult = ench.ignoresArmor and 1.0 or (1 - bossTargetArmorDR)
+        enchantProcDPS = enchantProcDPS + (ench.procDPS * mult)
+    end
+    AddEnchantDPS(mhEnchant)
+    AddEnchantDPS(ohEnchant)
+
+    local enchantThreatMult = 1.00
+    if classFile == "WARRIOR" and formKey == "DEFENSIVE_STANCE" then
+        enchantThreatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
+    elseif classFile == "DRUID" and (formKey == "BEAR" or formKey == "DIRE_BEAR") then
+        enchantThreatMult = 1.30 * (1 + 0.03 * (talents.feralInstinct or 0))
+    elseif classFile == "PALADIN" then
+        enchantThreatMult = select(1, self:GetRighteousFuryMultipliers(talents))
+    end
+    local enchantProcTPS = enchantProcDPS * enchantThreatMult
+
     return {
         playerLevel = playerLevel,
         bossLevel = bossLevel,
@@ -1210,6 +1296,11 @@ function FeralCalc:GetMitigationStats()
         isYellowHitCappedEqual = isYellowHitCappedEqual,
         bossTargetArmorDR = bossTargetArmorDR,
         bossTargetArmorMult = 1 - bossTargetArmorDR,
+        mhEnchant = mhEnchant,
+        ohEnchant = ohEnchant,
+        enchantProcDPS = enchantProcDPS,
+        enchantProcTPS = enchantProcTPS,
+        enchantThreatMult = enchantThreatMult,
 
         -- Talents
         talents = talents,
@@ -3128,8 +3219,8 @@ function FeralCalc:GetThreatPriorityList(stats)
             end
         end
 
-    else
-        -- Druid Bear / Dire Bear Form (and fallback)
+    elseif classFile == "DRUID" and (formKey == "BEAR" or formKey == "DIRE_BEAR") then
+        -- Druid Bear / Dire Bear Form
         unitLabel = "TPR"
         modeLabel = "Bear Threat"
         local bearThreatMult = 1.30 * (1 + 0.03 * (talents.feralInstinct or 0))
@@ -3179,6 +3270,28 @@ function FeralCalc:GetThreatPriorityList(stats)
                     end
                 end
             end
+        end
+
+    else
+        -- Hunter, Warlock, Mage, Priest, Rogue, Cat/Caster Druid
+        local dmgList, dmgUnit, dmgMode = self:GetSkillPriorityList(stats)
+        unitLabel = (dmgUnit == "DPE") and "TPE" or "TPM"
+        modeLabel = dmgMode .. " Threat"
+        for _, item in ipairs(dmgList) do
+            local threatMult = 1.00
+            if item.name == "Searing Pain" then
+                threatMult = 2.00
+            elseif classFile == "ROGUE" or (classFile == "DRUID" and formKey == "CAT") then
+                threatMult = 0.71
+            end
+            local threat = (item.avgDmg or 0) * threatMult
+            local eff = ((item.cost or 0) > 0) and (threat / item.cost) or ((item.eff or 0) * threatMult)
+            table.insert(list, {
+                displayName = item.displayName,
+                unit = unitLabel,
+                threat = threat,
+                eff = eff,
+            })
         end
     end
 

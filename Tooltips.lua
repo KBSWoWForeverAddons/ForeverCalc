@@ -581,7 +581,17 @@ local function ExtractGearStats(itemLink, visibleTooltip)
         defense = 0,
         health = 0,
         spellPower = 0,
+        enchantProcDPS = 0,
+        enchantName = nil,
     }
+
+    if FeralCalc and FeralCalc.GetWeaponEnchantBonus then
+        local ench = FeralCalc:GetWeaponEnchantBonus(itemLink)
+        if ench then
+            info.enchantProcDPS = ench.procDPS or 0
+            info.enchantName = ench.name
+        end
+    end
 
     local getItemStats = (C_Item and type(C_Item.GetItemStats) == "function" and C_Item.GetItemStats)
         or (type(GetItemStats) == "function" and GetItemStats)
@@ -710,8 +720,8 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local eqAP = eqGear.ap + (eqGear.str * strToAP) + (eqGear.agi * agiToAP)
     local deltaAP = newAP - eqAP
 
-    local newTotalDPS = (isWeapon and newGear.dps or 0) + (newAP / 14)
-    local eqTotalDPS = (isWeapon and eqGear.dps or 0) + (eqAP / 14)
+    local newTotalDPS = (isWeapon and (newGear.dps + (newGear.enchantProcDPS or 0)) or 0) + (newAP / 14)
+    local eqTotalDPS = (isWeapon and (eqGear.dps + (eqGear.enchantProcDPS or 0)) or 0) + (eqAP / 14)
     local deltaDPS = newTotalDPS - eqTotalDPS
 
     local levelScale = 60 / math.max(10, s.playerLevel or 60)
@@ -837,6 +847,13 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
         tooltip:AddDoubleLine(
             "  |cFF00CCFFHitpoints:|r",
             string.format("%s |cFFAAAAAA(%s Sta)|r", FormatDelta(deltaHP, " HP", 0), FormatDelta(deltaSta, "", 0))
+        )
+    end
+    if isWeapon and ((newGear.enchantProcDPS or 0) > 0 or (eqGear.enchantProcDPS or 0) > 0) then
+        local deltaEnch = (newGear.enchantProcDPS or 0) - (eqGear.enchantProcDPS or 0)
+        tooltip:AddDoubleLine(
+            "  |cFFFF8040Enchant Proc DPS:|r",
+            FormatDelta(deltaEnch, " DPS", 1)
         )
     end
 
