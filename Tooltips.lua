@@ -803,7 +803,7 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
             if classFile == "WARRIOR" then
                 threatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
             elseif classFile == "PALADIN" then
-                threatMult = (s.formKey == "PALADIN_RF") and 1.33 or 1.0
+                threatMult = select(1, self:GetRighteousFuryMultipliers(talents))
             end
             tooltip:AddDoubleLine(
                 "  |cFFFF8040Tank Threat:|r",
