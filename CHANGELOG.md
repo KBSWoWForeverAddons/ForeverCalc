@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.3.0] - 2026-11-24
+
+### Added
+- **Pet Mitigation & Threat Pane (Hunters & Warlocks)**: Added a separate movable **Pet Stats** window showing live pet Health, Armor, dynamic equal-level and `+3` boss Damage Reduction & Effective Health, Miss/Dodge Avoidance, Melee Damage/AP, post-armor Boss White DPS, and pet threat abilities (*Growl*, *Torment*, *Suffering*, *Anguish*) with estimated sustained TPS.
+- **Quick Access & Options**: Added a **Pet** toggle button to the top-left of the main Character Sheet stats pane (for Hunters and Warlocks), a **Pet Mitigation & Threat Pane** checkbox and position reset in the Options menu, and the `/fs pet` slash command.
+
 ## [v1.2.2] - 2026-11-21
 
 ### Added
