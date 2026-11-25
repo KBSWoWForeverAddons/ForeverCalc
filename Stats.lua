@@ -6,10 +6,12 @@ local DEFAULT_DB = {
     showCharacterPane = true,
     showPriorityPane = false,
     showThreatPane = false,
+    showPetPane = false,
     showMinimapButton = true,
     minimapAngle = 225,
     prioPoint = nil,
     threatPoint = nil,
+    petPoint = nil,
 }
 
 local function IsSecret(val)
@@ -92,6 +94,15 @@ local function HandleSlashCommand(msg)
         else
             FeralCalc:Print("Threat pane not ready yet.")
         end
+    elseif cmd == "pet" then
+        if FeralCalc.TogglePetPane then
+            local ok, err = pcall(FeralCalc.TogglePetPane, FeralCalc)
+            if not ok then
+                FeralCalc:Print("|cFFFF5555Error in pet:|r " .. tostring(err))
+            end
+        else
+            FeralCalc:Print("Pet pane not ready yet.")
+        end
     elseif cmd == "armor" then
         FeralCalc.db.showPostArmor = not FeralCalc.db.showPostArmor
         local state = FeralCalc.db.showPostArmor and "|cFF00FF00ENABLED|r" or "|cFFFF5555DISABLED|r"
@@ -121,6 +132,7 @@ local function HandleSlashCommand(msg)
         FeralCalc:Print("  |cFFFFFF00/fs options|r - Open the ForeverCalc Options menu")
         FeralCalc:Print("  |cFFFFFF00/fs prio|r    - Show/hide the movable Top-7 Skill Priority window")
         FeralCalc:Print("  |cFFFFFF00/fs threat|r  - Show/hide the movable Top-5 Threat Priority window")
+        FeralCalc:Print("  |cFFFFFF00/fs pet|r     - Show/hide the Pet Mitigation & Threat window (Hunter/Warlock)")
         FeralCalc:Print("  |cFFFFFF00/fs toggle|r  - Show/hide the Character Sheet Stats pane")
         FeralCalc:Print("  |cFFFFFF00/fs armor|r   - Toggle post-armor mitigation preview in spell tooltips")
         FeralCalc:Print("  |cFFFFFF00/fs minimap|r - Show/hide the Minimap button")
@@ -1109,6 +1121,246 @@ function FeralCalc:GetMitigationStats()
 
         -- Talents
         talents = talents,
+    }
+end
+
+-- ============================================================================
+-- PET MITIGATION & THREAT ENGINE (Hunters & Warlocks)
+-- ============================================================================
+function FeralCalc:GetPetStats()
+    local C = self.Constants
+    local classFile, className = self:GetPlayerClass()
+    local hasPet = (type(UnitExists) == "function" and UnitExists("pet")) and true or false
+    if not hasPet then
+        return {
+            hasPet = false,
+            classFile = classFile,
+            className = className,
+        }
+    end
+
+    local petName = (type(UnitName) == "function" and SafeString(UnitName("pet"))) or "Pet"
+    local petFamily = (type(UnitCreatureFamily) == "function" and SafeString(UnitCreatureFamily("pet"))) or ""
+
+    local fallbackLevel = (type(UnitLevel) == "function" and SafeNumber(UnitLevel("player"), 60)) or 60
+    if fallbackLevel <= 0 then fallbackLevel = 60 end
+    local petLevel = (type(UnitLevel) == "function" and SafeNumber(UnitLevel("pet"), fallbackLevel)) or fallbackLevel
+    if petLevel <= 0 then petLevel = fallbackLevel end
+    local bossLevel = petLevel + 3
+
+    local maxHP = 1
+    if type(UnitHealthMax) == "function" then
+        local ok, hp = pcall(UnitHealthMax, "pet")
+        if ok then maxHP = SafeNumber(hp, 1) end
+    end
+    if maxHP <= 0 then maxHP = 1 end
+
+    local baseArmor, effectiveArmor = 0, 0
+    if type(UnitArmor) == "function" then
+        local ok, bArmor, effArmor = pcall(UnitArmor, "pet")
+        if ok then
+            baseArmor = SafeNumber(bArmor, 0)
+            effectiveArmor = SafeNumber(effArmor, 0)
+        end
+    end
+
+    local armorConstEqual = 400 + 85 * petLevel
+    local armorConstBoss = 400 + 85 * bossLevel
+    local armorCapEqual = 3 * armorConstEqual
+    local armorCapBoss = 3 * armorConstBoss
+
+    local drEqual = math.min(C.ARMOR_CAP_PCT or 0.75, effectiveArmor / (effectiveArmor + armorConstEqual))
+    local drBoss = math.min(C.ARMOR_CAP_PCT or 0.75, effectiveArmor / (effectiveArmor + armorConstBoss))
+    local physicalEHP = maxHP / math.max(0.01, 1 - drBoss)
+    local physicalEHPEqual = maxHP / math.max(0.01, 1 - drEqual)
+
+    -- Defense & Avoidance
+    local equalDefense = petLevel * 5
+    local bossDefense = bossLevel * 5
+    local baseDef, armorDef = equalDefense, 0
+    if type(UnitDefense) == "function" then
+        local ok, bd, ad = pcall(UnitDefense, "pet")
+        if ok and SafeNumber(bd, 0) > 0 then
+            baseDef = SafeNumber(bd, equalDefense)
+            armorDef = SafeNumber(ad, 0)
+        end
+    end
+    local totalDefense = math.floor(baseDef + armorDef + 0.5)
+    local bossMissPct = math.max(0, (C.BASE_BOSS_MISS or 5.0) + (totalDefense - bossDefense) * 0.04)
+    local bossCritPct = math.max(0, (C.BASE_BOSS_CRIT or 5.0) + (bossDefense - totalDefense) * 0.04)
+
+    local petAgi = 0
+    if type(UnitStat) == "function" then
+        local ok, _, effAgi = pcall(UnitStat, "pet", 2)
+        if ok then petAgi = SafeNumber(effAgi, 0) end
+    end
+    local estDodgePct = 5.0 + (petAgi / 20.0) * (60 / math.max(10, petLevel))
+    local avoidancePct = bossMissPct + estDodgePct
+    local avoidanceFraction = math.min(0.99, math.max(0, avoidancePct / 100))
+    local avoidanceEHP = physicalEHP / (1 - avoidanceFraction)
+
+    -- Melee Damage & Attack Power
+    local lowDmg, hiDmg = 0, 0
+    if type(UnitDamage) == "function" then
+        local ok, l, h = pcall(UnitDamage, "pet")
+        if ok then
+            lowDmg = SafeNumber(l, 0)
+            hiDmg = SafeNumber(h, 0)
+        end
+    end
+    local avgDmg = (lowDmg + hiDmg) / 2
+
+    local mainSpeed = 2.0
+    if type(UnitAttackSpeed) == "function" then
+        local ok, spd = pcall(UnitAttackSpeed, "pet")
+        if ok and SafeNumber(spd, 0) > 0 then
+            mainSpeed = SafeNumber(spd, 2.0)
+        end
+    end
+
+    local totalAP = 0
+    if type(UnitAttackPower) == "function" then
+        local ok, bAP, pAP, nAP = pcall(UnitAttackPower, "pet")
+        if ok then
+            totalAP = SafeNumber(bAP, 0) + SafeNumber(pAP, 0) + SafeNumber(nAP, 0)
+        end
+    end
+
+    local whiteDPS = (mainSpeed > 0) and (avgDmg / mainSpeed) or 0
+    local bossArmor = (bossLevel >= 63) and C.BOSS_ARMOR or math.floor(C.BOSS_ARMOR * (bossLevel / 63) + 0.5)
+    local bossArmorDR = bossArmor / (bossArmor + 400 + 85 * petLevel)
+    local bossWhiteDPS = whiteDPS * (1 - bossArmorDR)
+
+    -- Hunter Pet Happiness
+    local happiness = nil
+    local happinessLabel = nil
+    if classFile == "HUNTER" and type(GetPetHappiness) == "function" then
+        local ok, hap = pcall(GetPetHappiness)
+        if ok and SafeNumber(hap, 0) > 0 then
+            happiness = SafeNumber(hap, 0)
+            if happiness == 1 then
+                happinessLabel = "Unhappy (75%)"
+            elseif happiness == 2 then
+                happinessLabel = "Content (100%)"
+            elseif happiness == 3 then
+                happinessLabel = "Happy (125%)"
+            end
+        end
+    end
+
+    -- Scan pet action bar for Growl / Torment / Suffering / Anguish
+    local hasGrowl, hasTorment, hasSuffering, hasAnguish = false, false, false, false
+    if type(GetPetActionInfo) == "function" then
+        for slot = 1, 10 do
+            local ok, actName = pcall(GetPetActionInfo, slot)
+            local sName = ok and SafeString(actName)
+            if sName then
+                local low = sName:lower()
+                if low:find("growl", 1, true) then hasGrowl = true end
+                if low:find("torment", 1, true) then hasTorment = true end
+                if low:find("suffering", 1, true) then hasSuffering = true end
+                if low:find("anguish", 1, true) then hasAnguish = true end
+            end
+        end
+    end
+
+    local abilityName = "None"
+    local abilityRank = 0
+    local abilityThreat = 0
+    local abilityCD = 0
+    local abilityTPS = 0
+
+    if classFile == "HUNTER" then
+        -- Growl (5s CD): Ranks 1..7 at levels 1, 10, 20, 30, 40, 50, 60
+        local growlReq = { 1, 10, 20, 30, 40, 50, 60 }
+        local growlVal = { 50, 65, 110, 170, 240, 320, 415 }
+        for r = #growlReq, 1, -1 do
+            if petLevel >= growlReq[r] then
+                abilityRank = r
+                abilityThreat = growlVal[r]
+                break
+            end
+        end
+        abilityName = string.format("Growl (R%d)", abilityRank)
+        abilityCD = 5
+        abilityTPS = abilityThreat / abilityCD
+    elseif hasTorment or petFamily == "Voidwalker" then
+        -- Torment (5s CD): Ranks 1..6 at levels 10, 20, 30, 40, 50, 60
+        local tormentReq = { 10, 20, 30, 40, 50, 60 }
+        local tormentVal = { 45, 75, 125, 215, 300, 395 }
+        for r = #tormentReq, 1, -1 do
+            if petLevel >= tormentReq[r] then
+                abilityRank = r
+                abilityThreat = tormentVal[r]
+                break
+            end
+        end
+        if abilityRank > 0 then
+            abilityName = string.format("Torment (R%d)", abilityRank)
+            abilityCD = 5
+            abilityTPS = abilityThreat / abilityCD
+        end
+    elseif hasAnguish or petFamily == "Felguard" then
+        abilityName = "Anguish (5s)"
+        abilityThreat = (petLevel >= 60) and 630 or 395
+        abilityCD = 5
+        abilityTPS = abilityThreat / abilityCD
+    elseif hasGrowl then
+        abilityName = "Growl"
+        abilityThreat = 415
+        abilityCD = 5
+        abilityTPS = abilityThreat / abilityCD
+    end
+
+    local estWhiteTPS = bossWhiteDPS
+    local totalEstTPS = estWhiteTPS + abilityTPS
+
+    return {
+        hasPet = true,
+        classFile = classFile,
+        className = className,
+        petName = petName,
+        petFamily = petFamily,
+        petLevel = petLevel,
+        bossLevel = bossLevel,
+        maxHP = maxHP,
+        baseArmor = baseArmor,
+        effectiveArmor = effectiveArmor,
+        armorConstEqual = armorConstEqual,
+        armorConstBoss = armorConstBoss,
+        armorCapEqual = armorCapEqual,
+        armorCapBoss = armorCapBoss,
+        drEqualPct = drEqual * 100,
+        drBossPct = drBoss * 100,
+        physicalEHP = physicalEHP,
+        physicalEHPEqual = physicalEHPEqual,
+        avoidanceEHP = avoidanceEHP,
+        totalDefense = totalDefense,
+        equalDefense = equalDefense,
+        bossDefense = bossDefense,
+        bossMissPct = bossMissPct,
+        bossCritPct = bossCritPct,
+        petAgi = petAgi,
+        estDodgePct = estDodgePct,
+        avoidancePct = avoidancePct,
+        lowDmg = lowDmg,
+        hiDmg = hiDmg,
+        avgDmg = avgDmg,
+        mainSpeed = mainSpeed,
+        totalAP = totalAP,
+        whiteDPS = whiteDPS,
+        bossArmorDRPct = bossArmorDR * 100,
+        bossWhiteDPS = bossWhiteDPS,
+        happiness = happiness,
+        happinessLabel = happinessLabel,
+        hasSuffering = hasSuffering,
+        abilityName = abilityName,
+        abilityRank = abilityRank,
+        abilityThreat = abilityThreat,
+        abilityCD = abilityCD,
+        abilityTPS = abilityTPS,
+        estWhiteTPS = estWhiteTPS,
+        totalEstTPS = totalEstTPS,
     }
 end
 

@@ -76,6 +76,31 @@ function FeralCalc:CreateCharacterPane()
         FeralCalc:ToggleCharacterPane(false)
     end)
 
+    -- Pet Stats Button in top-left corner of the pane (Hunters & Warlocks)
+    local petBtn = CreateFrame("Button", "FeralCalcPetToggleButton", pane, "UIPanelButtonTemplate")
+    petBtn:SetSize(42, 20)
+    petBtn:SetPoint("TOPLEFT", pane, "TOPLEFT", 10, -10)
+    petBtn:SetText("Pet")
+    petBtn:SetScript("OnClick", function()
+        FeralCalc:TogglePetPane()
+    end)
+    petBtn:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Pet Mitigation & Threat", 1.0, 0.49, 0.04)
+        GameTooltip:AddLine("Click to open or close the separate Pet Stats pane (Hunters & Warlocks).", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    petBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    pane.petBtn = petBtn
+    local initClass = select(1, self:GetPlayerClass())
+    if initClass == "HUNTER" or initClass == "WARLOCK" then
+        petBtn:Show()
+    else
+        petBtn:Hide()
+    end
+
     -- Title Banner
     local titleText = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     titleText:SetPoint("TOP", pane, "TOP", 0, -14)
@@ -986,6 +1011,330 @@ function FeralCalc:UpdateThreatPane()
     end
 end
 
+-- ============================================================================
+-- STANDALONE MOVABLE PET MITIGATION & THREAT PANE (Hunters & Warlocks)
+-- ============================================================================
+function FeralCalc:CreatePetPane()
+    if self.petPane then
+        return
+    end
+    self:InitDB()
+
+    local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
+    local pFrame = CreateFrame("Frame", "FeralCalcPetPane", UIParent, backdropTemplate)
+    pFrame:SetSize(276, 344)
+    pFrame:SetFrameStrata("HIGH")
+    pFrame:SetClampedToScreen(true)
+    pFrame:SetMovable(true)
+    pFrame:EnableMouse(true)
+    pFrame:RegisterForDrag("LeftButton")
+
+    local function SavePetPosition()
+        pFrame:StopMovingOrSizing()
+        local point, _, relPoint, xOfs, yOfs = pFrame:GetPoint()
+        if point then
+            FeralCalc.db.petPoint = {
+                point = point,
+                relPoint = relPoint or point,
+                x = xOfs or 0,
+                y = yOfs or 0,
+            }
+        end
+    end
+
+    pFrame:SetScript("OnDragStart", function(selfFrame)
+        selfFrame:StartMoving()
+    end)
+    pFrame:SetScript("OnDragStop", SavePetPosition)
+
+    local savedPos = self.db.petPoint
+    if type(savedPos) == "table" and savedPos.point then
+        pFrame:SetPoint(savedPos.point, UIParent, savedPos.relPoint or savedPos.point, savedPos.x or 0, savedPos.y or 0)
+    else
+        pFrame:SetPoint("CENTER", UIParent, "CENTER", 320, 20)
+    end
+
+    if pFrame.SetBackdrop then
+        pFrame:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 24,
+            insets = { left = 6, right = 6, top = 6, bottom = 6 },
+        })
+        pFrame:SetBackdropColor(0.06, 0.06, 0.08, 0.94)
+        pFrame:SetBackdropBorderColor(0.85, 0.75, 0.55, 1.0)
+    end
+
+    local closeBtn = CreateFrame("Button", nil, pFrame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", pFrame, "TOPRIGHT", -2, -2)
+    closeBtn:SetScript("OnClick", function()
+        FeralCalc:SetPetPaneVisible(false, true)
+    end)
+
+    local title = pFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", pFrame, "TOP", 0, -12)
+    title:SetText("|cFFFF7D0APet Stats|r")
+    pFrame.title = title
+
+    local headerBox = CreateFrame("Frame", nil, pFrame, backdropTemplate)
+    headerBox:SetSize(252, 44)
+    headerBox:SetPoint("TOP", pFrame, "TOP", 0, -34)
+    if headerBox.SetBackdrop then
+        headerBox:SetBackdrop({
+            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        headerBox:SetBackdropColor(0.14, 0.11, 0.08, 0.9)
+        headerBox:SetBackdropBorderColor(0.6, 0.45, 0.2, 0.9)
+    end
+
+    local petLabel = headerBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    petLabel:SetPoint("TOPLEFT", headerBox, "TOPLEFT", 10, -7)
+    petLabel:SetText("Pet:")
+
+    local petValue = headerBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    petValue:SetPoint("TOPRIGHT", headerBox, "TOPRIGHT", -10, -7)
+
+    local hpLabel = headerBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    hpLabel:SetPoint("BOTTOMLEFT", headerBox, "BOTTOMLEFT", 10, 7)
+    hpLabel:SetText("Max Health:")
+
+    local hpValue = headerBox:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    hpValue:SetPoint("BOTTOMRIGHT", headerBox, "BOTTOMRIGHT", -10, 7)
+
+    pFrame.petValue = petValue
+    pFrame.hpValue = hpValue
+    pFrame.rows = {}
+    pFrame.leftLabels = {}
+
+    local yOffset = -84
+
+    local function AddPetSection(text)
+        yOffset = yOffset - 8
+        local hdr = pFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        hdr:SetPoint("TOPLEFT", pFrame, "TOPLEFT", 14, yOffset)
+        hdr:SetText(text)
+        hdr:SetTextColor(1.0, 0.49, 0.04)
+
+        local line = pFrame:CreateTexture(nil, "ARTWORK")
+        line:SetHeight(2)
+        line:SetPoint("TOPLEFT", pFrame, "TOPLEFT", 14, yOffset - 15)
+        line:SetPoint("TOPRIGHT", pFrame, "TOPRIGHT", -14, yOffset - 15)
+        line:SetColorTexture(0.7, 0.55, 0.25, 0.85)
+
+        yOffset = yOffset - 20
+    end
+
+    local function AddPetRow(key, labelText, tooltipTitle, tooltipFunc)
+        local row = CreateFrame("Frame", nil, pFrame)
+        row:SetSize(248, 18)
+        row:SetPoint("TOPLEFT", pFrame, "TOPLEFT", 14, yOffset)
+
+        local highlight = row:CreateTexture(nil, "BACKGROUND")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(1, 0.82, 0, 0.12)
+        highlight:Hide()
+
+        local left = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        left:SetPoint("LEFT", row, "LEFT", 2, 0)
+        left:SetText(labelText)
+
+        local right = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        right:SetPoint("RIGHT", row, "RIGHT", -2, 0)
+        right:SetText("-")
+
+        if tooltipTitle or tooltipFunc then
+            row:EnableMouse(true)
+            row:SetScript("OnEnter", function(selfRow)
+                highlight:Show()
+                GameTooltip:SetOwner(selfRow, "ANCHOR_RIGHT")
+                if tooltipTitle then
+                    GameTooltip:SetText(tooltipTitle, 1.0, 0.82, 0.0)
+                end
+                local ps = pFrame.lastPetStats
+                if ps and ps.hasPet and tooltipFunc then
+                    tooltipFunc(GameTooltip, ps)
+                else
+                    GameTooltip:AddLine("Summon a pet to view live pet mitigation and threat stats.", 0.8, 0.8, 0.8, true)
+                end
+                GameTooltip:Show()
+            end)
+            row:SetScript("OnLeave", function()
+                highlight:Hide()
+                GameTooltip:Hide()
+            end)
+        end
+
+        pFrame.rows[key] = right
+        pFrame.leftLabels[key] = left
+        yOffset = yOffset - 18
+    end
+
+    -- Section 1: Pet Mitigation
+    AddPetSection("Pet Mitigation")
+
+    AddPetRow("armor", "Armor:", "Pet Effective Armor", function(tt, p)
+        tt:AddDoubleLine("Base Armor:", FormatNumber(p.baseArmor), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Effective Armor:", FormatNumber(p.effectiveArmor), 1, 1, 1, 0, 1, 0)
+        tt:AddDoubleLine(string.format("75%% Cap (vs Lvl %d Boss):", p.bossLevel), FormatNumber(p.armorCapBoss), 1, 1, 1, 1, 0.82, 0)
+    end)
+
+    AddPetRow("drEqual", "DR vs Equal Lvl:", "Pet Damage Reduction (Equal Level)", function(tt, p)
+        tt:AddLine(string.format("Formula (vs Lvl %d): Armor / (Armor + %d)", p.petLevel, p.armorConstEqual), 0.8, 0.8, 0.8)
+        tt:AddDoubleLine(string.format("Physical DR (vs Lvl %d):", p.petLevel), string.format("%.2f%%", p.drEqualPct), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Physical EHP (Equal):", FormatNumber(p.physicalEHPEqual), 1, 1, 1, 0.8, 0.8, 0.8)
+    end)
+
+    AddPetRow("drBoss", "DR vs +3 Boss:", "Pet Damage Reduction (vs +3 Boss)", function(tt, p)
+        tt:AddLine(string.format("Formula (vs Lvl %d): Armor / (Armor + %d)", p.bossLevel, p.armorConstBoss), 0.8, 0.8, 0.8)
+        tt:AddDoubleLine(string.format("Armor DR (vs Lvl %d):", p.bossLevel), string.format("%.2f%%", p.drBossPct), 1, 1, 1, 1, 0.82, 0)
+    end)
+
+    AddPetRow("ehp", "Physical EHP (Boss):", "Pet Effective Health (EHP)", function(tt, p)
+        tt:AddLine("Physical EHP = Pet MaxHP / (1 - Boss Armor DR)", 0.8, 0.8, 0.8)
+        tt:AddDoubleLine(string.format("Physical EHP (vs Lvl %d):", p.bossLevel), FormatNumber(p.physicalEHP), 1, 1, 1, 0, 1, 0)
+        tt:AddDoubleLine("Avoidance-Adjusted EHP:", FormatNumber(p.avoidanceEHP), 1, 1, 1, 0, 0.8, 1)
+    end)
+
+    AddPetRow("avoid", "Boss Miss / Dodge:", "Pet Avoidance & Defense", function(tt, p)
+        tt:AddDoubleLine("Pet Defense:", string.format("%d (vs %d Boss WS)", p.totalDefense, p.bossDefense), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Boss Miss %:", string.format("%.2f%%", p.bossMissPct), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine(string.format("Est. Dodge (%d Agi):", p.petAgi), string.format("%.2f%%", p.estDodgePct), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("Combined Avoidance:", string.format("%.2f%%", p.avoidancePct), 1, 1, 1, 0, 1, 0)
+    end)
+
+    -- Section 2: Pet Threat & Offense
+    AddPetSection("Pet Threat & Offense")
+
+    AddPetRow("meleeDmg", "Melee Damage:", "Pet Melee Damage & Speed", function(tt, p)
+        tt:AddDoubleLine("Melee Range:", string.format("%.1f - %.1f (%.2fs)", p.lowDmg, p.hiDmg, p.mainSpeed), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Raw White DPS:", string.format("%.1f DPS", p.whiteDPS), 1, 1, 1, 1, 0.82, 0)
+        if p.happinessLabel then
+            tt:AddDoubleLine("Happiness:", p.happinessLabel, 1, 1, 1, 0, 1, 0)
+        end
+    end)
+
+    AddPetRow("attackPower", "Attack Power:", "Pet Attack Power", function(tt, p)
+        tt:AddDoubleLine("Total Pet AP:", FormatNumber(p.totalAP), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("AP DPS Contribution:", string.format("+%.1f DPS", p.totalAP / 14), 1, 1, 1, 0.8, 0.8, 0.8)
+    end)
+
+    AddPetRow("whiteDps", "Boss White DPS:", "Post-Armor White DPS & Threat", function(tt, p)
+        tt:AddDoubleLine(string.format("vs Lvl %d Boss (-%.1f%% Armor):", p.bossLevel, p.bossArmorDRPct), string.format("%.1f DPS", p.bossWhiteDPS), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("White Melee Threat:", string.format("%.1f TPS", p.estWhiteTPS), 1, 1, 1, 0, 1, 0)
+    end)
+
+    AddPetRow("threatAbility", "Threat Ability:", "Pet Taunt / Threat Ability", function(tt, p)
+        if p.abilityThreat > 0 then
+            tt:AddDoubleLine(p.abilityName .. ":", string.format("+%d Threat every %ds", p.abilityThreat, p.abilityCD), 1, 1, 1, 1, 0.82, 0)
+            tt:AddDoubleLine("Ability Sustained TPS:", string.format("%.1f TPS", p.abilityTPS), 1, 1, 1, 0, 1, 0)
+            if p.hasSuffering then
+                tt:AddLine("Suffering (AoE taunt / threat burst) is on pet action bar.", 0.8, 0.8, 0.8, true)
+            end
+        else
+            tt:AddLine("No Growl / Torment / Anguish threat ability active for this pet.", 0.8, 0.8, 0.8, true)
+        end
+    end)
+
+    AddPetRow("totalTps", "Est. Total Threat:", "Combined Sustained Pet TPS", function(tt, p)
+        tt:AddDoubleLine("White Melee TPS (vs Boss):", string.format("%.1f TPS", p.estWhiteTPS), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Threat Ability TPS:", string.format("%.1f TPS", p.abilityTPS), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("Estimated Total TPS:", string.format("%.1f TPS", p.totalEstTPS), 1, 1, 1, 0, 1, 0)
+        tt:AddLine("White DPS after +3 boss armor + threat ability on cooldown (excludes Bite/Claw).", 0.7, 0.7, 0.7, true)
+    end)
+
+    if self.db.showPetPane then
+        pFrame:Show()
+    else
+        pFrame:Hide()
+    end
+    self.petPane = pFrame
+end
+
+function FeralCalc:SetPetPaneVisible(visible, silent)
+    self:InitDB()
+    if not self.petPane then
+        self:CreatePetPane()
+    end
+    self.db.showPetPane = visible and true or false
+    if self.db.showPetPane then
+        self.petPane:Show()
+        self:UpdatePetPane()
+        if not silent then
+            self:Print("Pet Mitigation & Threat window: |cFF00FF00SHOWN|r (Drag anywhere on the window to move)")
+        end
+    else
+        self.petPane:Hide()
+        if not silent then
+            self:Print("Pet Mitigation & Threat window: |cFFFF5555HIDDEN|r")
+        end
+    end
+    if self.RefreshOptionsFrame then
+        self:RefreshOptionsFrame()
+    end
+end
+
+function FeralCalc:TogglePetPane()
+    self:InitDB()
+    if not self.petPane then
+        self:CreatePetPane()
+    end
+    self:SetPetPaneVisible(not self.petPane:IsShown(), false)
+end
+
+function FeralCalc:UpdatePetPane()
+    if not self.petPane or not self.petPane:IsShown() then
+        return
+    end
+
+    local p = self:GetPetStats()
+    self.petPane.lastPetStats = p
+    local rows = self.petPane.rows
+    local leftLabels = self.petPane.leftLabels
+
+    if not p.hasPet then
+        self.petPane.petValue:SetText("|cFF888888No Pet Summoned|r")
+        self.petPane.hpValue:SetText("|cFF888888-|r")
+        if leftLabels.drEqual then leftLabels.drEqual:SetText("DR vs Equal Lvl:") end
+        if leftLabels.drBoss then leftLabels.drBoss:SetText("DR vs +3 Boss:") end
+        for _, valFS in pairs(rows) do
+            valFS:SetText("|cFF666666-|r")
+        end
+        return
+    end
+
+    local familyPart = (p.petFamily ~= "" and (" · " .. p.petFamily)) or ""
+    self.petPane.petValue:SetText(string.format("|cFFFFFFFF%s|r |cFFAAAAAA(Lvl %d%s)|r", p.petName, p.petLevel, familyPart))
+    self.petPane.hpValue:SetText("|cFF00FF00" .. FormatNumber(p.maxHP) .. "|r")
+
+    if leftLabels.drEqual then leftLabels.drEqual:SetText(string.format("DR vs Lvl %d:", p.petLevel)) end
+    if leftLabels.drBoss then leftLabels.drBoss:SetText(string.format("DR vs Lvl %d Boss:", p.bossLevel)) end
+
+    rows.armor:SetText("|cFFFFFFFF" .. FormatNumber(p.effectiveArmor) .. "|r")
+    rows.drEqual:SetText(string.format("|cFFFFFFFF%.2f%%|r", p.drEqualPct))
+    rows.drBoss:SetText(string.format("|cFFFFCC80%.2f%%|r", p.drBossPct))
+    rows.ehp:SetText("|cFF00FF00" .. FormatNumber(p.physicalEHP) .. "|r")
+    rows.avoid:SetText(string.format("|cFF00CCFF%.1f%%|r |cFFAAAAAA(%.1f%% M / %.1f%% D)|r", p.avoidancePct, p.bossMissPct, p.estDodgePct))
+
+    rows.meleeDmg:SetText(string.format("|cFFFFFFFF%d - %d|r |cFFAAAAAA(%.2fs)|r", math.floor(p.lowDmg + 0.5), math.floor(p.hiDmg + 0.5), p.mainSpeed))
+    rows.attackPower:SetText("|cFFFFFFFF" .. FormatNumber(p.totalAP) .. "|r")
+    rows.whiteDps:SetText(string.format("|cFFFFFFFF%.1f DPS|r |cFFAAAAAA(%.1f raw)|r", p.bossWhiteDPS, p.whiteDPS))
+
+    if p.abilityThreat > 0 then
+        rows.threatAbility:SetText(string.format("|cFFFFCC00%s|r |cFFAAAAAA(%.1f TPS)|r", p.abilityName, p.abilityTPS))
+    else
+        rows.threatAbility:SetText("|cFF888888None|r")
+    end
+
+    rows.totalTps:SetText(string.format("|cFFFF5555%.1f TPS|r |cFFAAAAAA(Boss)|r", p.totalEstTPS))
+end
+
 function FeralCalc:UpdateCharacterPaneVisibility()
     if not self.characterPane then return end
     self:InitDB()
@@ -1032,6 +1381,13 @@ function FeralCalc:UpdateCharacterPane()
 
     local s = self:GetMitigationStats()
     self.lastStats = s
+    if self.characterPane.petBtn then
+        if s.classFile == "HUNTER" or s.classFile == "WARLOCK" then
+            self.characterPane.petBtn:Show()
+        else
+            self.characterPane.petBtn:Hide()
+        end
+    end
     local rows = self.characterPane.rows
 
     -- Header & Class Styling
@@ -1196,6 +1552,10 @@ local trackedEvents = {
     "UPDATE_SHAPESHIFT_FORM",
     "PLAYER_EQUIPMENT_CHANGED",
     "CHARACTER_POINTS_CHANGED",
+    "UNIT_PET",
+    "PET_UI_UPDATE",
+    "PET_BAR_UPDATE",
+    "UNIT_HAPPINESS",
 }
 for _, ev in ipairs(trackedEvents) do
     pcall(eventFrame.RegisterEvent, eventFrame, ev)
@@ -1208,6 +1568,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         FeralCalc:CreateCharacterPane()
         FeralCalc:CreatePriorityPane()
         FeralCalc:CreateThreatPane()
+        FeralCalc:CreatePetPane()
         if FeralCalc.CreateMinimapButton then FeralCalc:CreateMinimapButton() end
     elseif event == "PLAYER_LOGIN" then
         FeralCalc:InitDB()
@@ -1221,16 +1582,25 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         FeralCalc:CreateCharacterPane()
         FeralCalc:CreatePriorityPane()
         FeralCalc:CreateThreatPane()
+        FeralCalc:CreatePetPane()
         if FeralCalc.CreateMinimapButton then FeralCalc:CreateMinimapButton() end
         FeralCalc:UpdateCharacterPane()
         FeralCalc:UpdatePriorityPane()
         FeralCalc:UpdateThreatPane()
+        FeralCalc:UpdatePetPane()
     elseif event == "SPELLS_CHANGED" then
         FeralCalc:ScanSpellbook()
         FeralCalc:UpdateCharacterPane()
         FeralCalc:UpdatePriorityPane()
         FeralCalc:UpdateThreatPane()
+        FeralCalc:UpdatePetPane()
+    elseif event == "UNIT_PET" or event == "PET_UI_UPDATE" or event == "PET_BAR_UPDATE" or event == "UNIT_HAPPINESS" then
+        FeralCalc:UpdatePetPane()
     else
+        if arg1 == "pet" and event:find("^UNIT_") then
+            FeralCalc:UpdatePetPane()
+            return
+        end
         if arg1 and arg1 ~= "player" and event:find("^UNIT_") then
             return
         end

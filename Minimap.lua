@@ -30,7 +30,7 @@ function FeralCalc:CreateOptionsFrame()
 
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     local frame = CreateFrame("Frame", "ForeverTankOptionsFrame", UIParent, backdropTemplate)
-    frame:SetSize(390, 322)
+    frame:SetSize(390, 364)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
@@ -175,10 +175,25 @@ function FeralCalc:CreateOptionsFrame()
     )
 
     AddCheckbox(
+        "petPane",
+        "Pet Mitigation & Threat Pane",
+        "Show pet armor, EHP, and threat window for Hunters & Warlocks (/fs pet).",
+        -196,
+        function(checked)
+            if FeralCalc.SetPetPaneVisible then
+                FeralCalc:SetPetPaneVisible(checked, true)
+            else
+                FeralCalc:InitDB()
+                FeralCalc.db.showPetPane = checked
+            end
+        end
+    )
+
+    AddCheckbox(
         "postArmor",
         "Post-Armor Boss Tooltip Estimates",
         "Include Boss (Player Level +3) armor reduction in spell tooltips.",
-        -196,
+        -238,
         function(checked)
             FeralCalc:InitDB()
             FeralCalc.db.showPostArmor = checked
@@ -189,7 +204,7 @@ function FeralCalc:CreateOptionsFrame()
         "minimapBtn",
         "Show Minimap Button",
         "Toggle this minimap shield button (restore with /ft minimap).",
-        -238,
+        -280,
         function(checked)
             FeralCalc:InitDB()
             FeralCalc.db.showMinimapButton = checked
@@ -208,6 +223,7 @@ function FeralCalc:CreateOptionsFrame()
         FeralCalc:InitDB()
         FeralCalc.db.prioPoint = nil
         FeralCalc.db.threatPoint = nil
+        FeralCalc.db.petPoint = nil
         if FeralCalc.priorityPane then
             FeralCalc.priorityPane:ClearAllPoints()
             FeralCalc.priorityPane:SetPoint("CENTER", UIParent, "CENTER", 320, 80)
@@ -216,7 +232,11 @@ function FeralCalc:CreateOptionsFrame()
             FeralCalc.threatPane:ClearAllPoints()
             FeralCalc.threatPane:SetPoint("CENTER", UIParent, "CENTER", 320, -90)
         end
-        FeralCalc:Print("Damage & Threat Priority window positions reset.")
+        if FeralCalc.petPane then
+            FeralCalc.petPane:ClearAllPoints()
+            FeralCalc.petPane:SetPoint("CENTER", UIParent, "CENTER", 320, 20)
+        end
+        FeralCalc:Print("Priority & Pet window positions reset.")
     end)
 
     local doneBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -259,6 +279,14 @@ function FeralCalc:RefreshOptionsFrame()
             checks.threatPane:SetChecked(isThreatShown and true or false)
         else
             checks.threatPane:SetChecked(self.db.showThreatPane and true or false)
+        end
+    end
+    if checks.petPane then
+        local isPetShown = self.petPane and self.petPane:IsShown()
+        if isPetShown ~= nil then
+            checks.petPane:SetChecked(isPetShown and true or false)
+        else
+            checks.petPane:SetChecked(self.db.showPetPane and true or false)
         end
     end
     if checks.postArmor then
