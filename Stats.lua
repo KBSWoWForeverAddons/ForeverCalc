@@ -417,6 +417,11 @@ function FeralCalc:GetTalentStats()
         suppression = 0,
         shadowFocus = 0,
         balanceOfPower = 0,
+        intimidation = 0,
+        bestialDiscipline = 0,
+        impVoidwalker = 0,
+        impFirebolt = 0,
+        impLashOfPain = 0,
         discovered = {},
         tabPoints = {},
         tabNames = {},
@@ -1248,20 +1253,47 @@ function FeralCalc:GetPetStats()
         end
     end
 
-    -- Scan pet action bar for Growl / Torment / Suffering / Anguish
+    -- Scan pet action bar for threat & damage/debuff skills + autocast state
+    local talents = self:GetTalentStats()
     local hasGrowl, hasTorment, hasSuffering, hasAnguish = false, false, false, false
+    local hasBite, hasClaw, hasScreech, hasThunderstomp, hasLightningBreath = false, false, false, false, false
+    local hasFirebolt, hasLashOfPain = false, false
+    local growlAutoOff, tormentAutoOff = false, false
+
     if type(GetPetActionInfo) == "function" then
         for slot = 1, 10 do
-            local ok, actName = pcall(GetPetActionInfo, slot)
+            local ok, actName, _, _, _, autoCastAllowed, autoCastEnabled = pcall(GetPetActionInfo, slot)
             local sName = ok and SafeString(actName)
             if sName then
                 local low = sName:lower()
-                if low:find("growl", 1, true) then hasGrowl = true end
-                if low:find("torment", 1, true) then hasTorment = true end
+                if low:find("growl", 1, true) then
+                    hasGrowl = true
+                    if autoCastAllowed and not autoCastEnabled then growlAutoOff = true end
+                end
+                if low:find("torment", 1, true) then
+                    hasTorment = true
+                    if autoCastAllowed and not autoCastEnabled then tormentAutoOff = true end
+                end
                 if low:find("suffering", 1, true) then hasSuffering = true end
                 if low:find("anguish", 1, true) then hasAnguish = true end
+                if low:find("bite", 1, true) then hasBite = true end
+                if low:find("claw", 1, true) then hasClaw = true end
+                if low:find("screech", 1, true) then hasScreech = true end
+                if low:find("thunderstomp", 1, true) then hasThunderstomp = true end
+                if low:find("lightning breath", 1, true) then hasLightningBreath = true end
+                if low:find("firebolt", 1, true) then hasFirebolt = true end
+                if low:find("lash of pain", 1, true) then hasLashOfPain = true end
             end
         end
+    end
+
+    local function PickRankValue(level, reqLevels, values)
+        for r = #reqLevels, 1, -1 do
+            if level >= reqLevels[r] then
+                return r, values[r]
+            end
+        end
+        return 0, 0
     end
 
     local abilityName = "None"
@@ -1269,36 +1301,130 @@ function FeralCalc:GetPetStats()
     local abilityThreat = 0
     local abilityCD = 0
     local abilityTPS = 0
+    local primaryAutoCastOff = false
+    local extraSources = {}
+    local voidMult = 1 + 0.10 * (talents.impVoidwalker or 0)
+    local hasIntimidation = false
 
     if classFile == "HUNTER" then
         -- Growl (5s CD): Ranks 1..7 at levels 1, 10, 20, 30, 40, 50, 60
-        local growlReq = { 1, 10, 20, 30, 40, 50, 60 }
-        local growlVal = { 50, 65, 110, 170, 240, 320, 415 }
-        for r = #growlReq, 1, -1 do
-            if petLevel >= growlReq[r] then
-                abilityRank = r
-                abilityThreat = growlVal[r]
-                break
-            end
-        end
+        abilityRank, abilityThreat = PickRankValue(petLevel, { 1, 10, 20, 30, 40, 50, 60 }, { 50, 65, 110, 170, 240, 320, 415 })
         abilityName = string.format("Growl (R%d)", abilityRank)
         abilityCD = 5
         abilityTPS = abilityThreat / abilityCD
-    elseif hasTorment or petFamily == "Voidwalker" then
-        -- Torment (5s CD): Ranks 1..6 at levels 10, 20, 30, 40, 50, 60
-        local tormentReq = { 10, 20, 30, 40, 50, 60 }
-        local tormentVal = { 45, 75, 125, 215, 300, 395 }
-        for r = #tormentReq, 1, -1 do
-            if petLevel >= tormentReq[r] then
-                abilityRank = r
-                abilityThreat = tormentVal[r]
-                break
+        primaryAutoCastOff = growlAutoOff
+
+        -- Intimidation (60s CD): Beast Mastery talent
+        hasIntimidation = ((talents.intimidation or 0) > 0)
+            or (type(IsSpellKnown) == "function" and IsSpellKnown(19577) and true or false)
+            or (type(IsPlayerSpell) == "function" and IsPlayerSpell(19577) and true or false)
+        if hasIntimidation then
+            local intimThreat = math.floor(580 * math.min(1, petLevel / 60) + 0.5)
+            table.insert(extraSources, {
+                name = "Intimidation",
+                threat = intimThreat,
+                cd = 60,
+                tps = intimThreat / 60.0,
+            })
+        end
+
+        -- Focus-budgeted active pet skills (reserve 3 Focus/s for Growl every 5s)
+        local focusRegen = 5.0 * (1 + 0.10 * (talents.bestialDiscipline or 0))
+        local availFocusPerSec = math.max(0, focusRegen - 3.0)
+        local physMult = 1 - bossArmorDR
+
+        if hasThunderstomp then
+            local tsRank, tsAvg = PickRankValue(petLevel, { 30, 40, 50 }, { 115, 165, 215 })
+            if tsRank > 0 then
+                table.insert(extraSources, {
+                    name = string.format("Thunderstomp (R%d)", tsRank),
+                    threat = tsAvg,
+                    cd = 60,
+                    tps = tsAvg / 60.0,
+                })
             end
         end
+
+        local bestDump = nil
+        local function ConsiderDump(entry)
+            if not bestDump or entry.tps > bestDump.tps then
+                bestDump = entry
+            end
+        end
+
+        if hasScreech then
+            local scRank, scAvg = PickRankValue(petLevel, { 8, 24, 48, 56 }, { 10, 16, 23, 30 })
+            if scRank > 0 then
+                local threatPerCast = (scAvg * physMult) + 50
+                ConsiderDump({
+                    name = string.format("Screech (R%d)", scRank),
+                    threat = threatPerCast,
+                    cd = 0,
+                    tps = threatPerCast * (availFocusPerSec / 20),
+                })
+            end
+        end
+        if hasLightningBreath then
+            local lbRank, lbAvg = PickRankValue(petLevel, { 1, 12, 24, 36, 48, 60 }, { 13, 25, 42, 60, 86, 108 })
+            if lbRank > 0 then
+                ConsiderDump({
+                    name = string.format("Lightning Breath (R%d)", lbRank),
+                    threat = lbAvg,
+                    cd = 0,
+                    tps = lbAvg * (availFocusPerSec / 50),
+                })
+            end
+        end
+        if hasBite then
+            local bRank, bAvg = PickRankValue(petLevel, { 1, 8, 16, 24, 32, 40, 48, 56 }, { 8, 17, 26, 34, 44, 54, 75, 89 })
+            if bRank > 0 then
+                local dmg = bAvg * physMult
+                ConsiderDump({
+                    name = string.format("Bite (R%d)", bRank),
+                    threat = dmg,
+                    cd = 10,
+                    tps = dmg * math.min(0.10, availFocusPerSec / 35),
+                })
+            end
+        end
+        if hasClaw then
+            local cRank, cAvg = PickRankValue(petLevel, { 1, 8, 16, 24, 32, 40, 48, 56 }, { 5, 10, 15, 20, 25, 31, 41, 49 })
+            if cRank > 0 then
+                local dmg = cAvg * physMult
+                ConsiderDump({
+                    name = string.format("Claw (R%d)", cRank),
+                    threat = dmg,
+                    cd = 0,
+                    tps = dmg * (availFocusPerSec / 25),
+                })
+            end
+        end
+        if bestDump then
+            table.insert(extraSources, bestDump)
+        end
+    elseif hasTorment or petFamily == "Voidwalker" then
+        -- Torment (5s CD): Ranks 1..6 at levels 10, 20, 30, 40, 50, 60
+        local baseTorment
+        abilityRank, baseTorment = PickRankValue(petLevel, { 10, 20, 30, 40, 50, 60 }, { 45, 75, 125, 215, 300, 395 })
         if abilityRank > 0 then
+            abilityThreat = math.floor((baseTorment * voidMult) + 0.5)
             abilityName = string.format("Torment (R%d)", abilityRank)
             abilityCD = 5
             abilityTPS = abilityThreat / abilityCD
+            primaryAutoCastOff = tormentAutoOff
+        end
+
+        if hasSuffering or petLevel >= 24 then
+            local sufRank, baseSuf = PickRankValue(petLevel, { 24, 36, 48, 60 }, { 150, 300, 450, 600 })
+            if sufRank > 0 then
+                local sufThreat = math.floor((baseSuf * voidMult) + 0.5)
+                table.insert(extraSources, {
+                    name = string.format("Suffering (R%d)", sufRank),
+                    threat = sufThreat,
+                    cd = 120,
+                    tps = sufThreat / 120.0,
+                })
+            end
         end
     elseif hasAnguish or petFamily == "Felguard" then
         abilityName = "Anguish (5s)"
@@ -1310,10 +1436,43 @@ function FeralCalc:GetPetStats()
         abilityThreat = 415
         abilityCD = 5
         abilityTPS = abilityThreat / abilityCD
+        primaryAutoCastOff = growlAutoOff
+    end
+
+    if classFile == "WARLOCK" then
+        if hasFirebolt or petFamily == "Imp" then
+            local fbRank, fbAvg = PickRankValue(petLevel, { 1, 8, 18, 28, 38, 48, 58 }, { 10, 18, 30, 44, 62, 82, 95 })
+            if fbRank > 0 then
+                local castTime = math.max(1.0, 2.0 - 0.25 * (talents.impFirebolt or 0))
+                table.insert(extraSources, {
+                    name = string.format("Firebolt (R%d)", fbRank),
+                    threat = fbAvg,
+                    cd = castTime,
+                    tps = fbAvg / castTime,
+                })
+            end
+        end
+        if hasLashOfPain or petFamily == "Succubus" then
+            local lopRank, lopAvg = PickRankValue(petLevel, { 20, 28, 36, 44, 52, 60 }, { 33, 44, 60, 73, 87, 99 })
+            if lopRank > 0 then
+                local cd = math.max(6, 12 - 3 * (talents.impLashOfPain or 0))
+                table.insert(extraSources, {
+                    name = string.format("Lash of Pain (R%d)", lopRank),
+                    threat = lopAvg,
+                    cd = cd,
+                    tps = lopAvg / cd,
+                })
+            end
+        end
+    end
+
+    local extraThreatTPS = 0
+    for _, src in ipairs(extraSources) do
+        extraThreatTPS = extraThreatTPS + (src.tps or 0)
     end
 
     local estWhiteTPS = bossWhiteDPS
-    local totalEstTPS = estWhiteTPS + abilityTPS
+    local totalEstTPS = estWhiteTPS + abilityTPS + extraThreatTPS
 
     return {
         hasPet = true,
@@ -1359,6 +1518,11 @@ function FeralCalc:GetPetStats()
         abilityThreat = abilityThreat,
         abilityCD = abilityCD,
         abilityTPS = abilityTPS,
+        primaryAutoCastOff = primaryAutoCastOff,
+        impVoidwalkerRank = talents.impVoidwalker or 0,
+        hasIntimidation = hasIntimidation,
+        extraSources = extraSources,
+        extraThreatTPS = extraThreatTPS,
         estWhiteTPS = estWhiteTPS,
         totalEstTPS = totalEstTPS,
     }

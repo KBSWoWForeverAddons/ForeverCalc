@@ -64,6 +64,13 @@ FeralCalc.TrackedTalentNames = {
     ["Suppression"]             = "suppression",       -- +2%/4%/6%/8%/10% Affliction Spell Hit (Warlock)
     ["Shadow Focus"]            = "shadowFocus",       -- +2%/4%/6%/8%/10% Shadow Spell Hit (Priest)
     ["Balance of Power"]        = "balanceOfPower",    -- +2%/4% Spell Hit (Druid)
+
+    -- Hunter & Warlock Pet Threat Talents
+    ["Intimidation"]            = "intimidation",      -- Hunter BM: +580 Threat (60s CD)
+    ["Bestial Discipline"]      = "bestialDiscipline", -- Hunter BM: +10%/20% pet Focus regen
+    ["Improved Voidwalker"]     = "impVoidwalker",     -- Warlock Demo: +10%/20%/30% Torment & Suffering
+    ["Improved Firebolt"]       = "impFirebolt",       -- Warlock Destro: -0.25s/-0.5s Firebolt cast time
+    ["Improved Lash of Pain"]   = "impLashOfPain",     -- Warlock Destro: -3s/-6s Lash of Pain CD
 }
 
 -- ============================================================================

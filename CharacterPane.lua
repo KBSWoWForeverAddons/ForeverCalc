@@ -1022,7 +1022,7 @@ function FeralCalc:CreatePetPane()
 
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     local pFrame = CreateFrame("Frame", "FeralCalcPetPane", UIParent, backdropTemplate)
-    pFrame:SetSize(276, 344)
+    pFrame:SetSize(276, 362)
     pFrame:SetFrameStrata("HIGH")
     pFrame:SetClampedToScreen(true)
     pFrame:SetMovable(true)
@@ -1234,19 +1234,38 @@ function FeralCalc:CreatePetPane()
         if p.abilityThreat > 0 then
             tt:AddDoubleLine(p.abilityName .. ":", string.format("+%d Threat every %ds", p.abilityThreat, p.abilityCD), 1, 1, 1, 1, 0.82, 0)
             tt:AddDoubleLine("Ability Sustained TPS:", string.format("%.1f TPS", p.abilityTPS), 1, 1, 1, 0, 1, 0)
-            if p.hasSuffering then
-                tt:AddLine("Suffering (AoE taunt / threat burst) is on pet action bar.", 0.8, 0.8, 0.8, true)
+            if (p.impVoidwalkerRank or 0) > 0 then
+                tt:AddDoubleLine("Improved Voidwalker:", string.format("+%d%% Torment/Suffering", p.impVoidwalkerRank * 10), 1, 1, 1, 0.4, 0.8, 1)
+            end
+            if p.primaryAutoCastOff then
+                tt:AddLine("Note: Autocast is currently OFF on pet bar.", 1, 0.82, 0, true)
             end
         else
             tt:AddLine("No Growl / Torment / Anguish threat ability active for this pet.", 0.8, 0.8, 0.8, true)
         end
     end)
 
+    AddPetRow("extraThreat", "Bonus Threat:", "Pet Skills & Talents Threat", function(tt, p)
+        local sources = p.extraSources or {}
+        if #sources > 0 then
+            for _, src in ipairs(sources) do
+                local detail = (src.cd and src.cd > 0)
+                    and string.format("+%.0f every %.1gs (%.1f TPS)", src.threat or 0, src.cd, src.tps or 0)
+                    or string.format("+%.1f TPS (Focus)", src.tps or 0)
+                tt:AddDoubleLine(src.name .. ":", detail, 1, 1, 1, 1, 0.82, 0)
+            end
+            tt:AddDoubleLine("Combined Bonus TPS:", string.format("+%.1f TPS", p.extraThreatTPS or 0), 1, 1, 1, 0, 1, 0)
+        else
+            tt:AddLine("No active pet threat talents or bar skills (Intimidation, Suffering, Screech, Bite, Claw, etc.).", 0.8, 0.8, 0.8, true)
+        end
+    end)
+
     AddPetRow("totalTps", "Est. Total Threat:", "Combined Sustained Pet TPS", function(tt, p)
         tt:AddDoubleLine("White Melee TPS (vs Boss):", string.format("%.1f TPS", p.estWhiteTPS), 1, 1, 1, 1, 1, 1)
-        tt:AddDoubleLine("Threat Ability TPS:", string.format("%.1f TPS", p.abilityTPS), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("Primary Ability TPS:", string.format("%.1f TPS", p.abilityTPS), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("Skills & Talents TPS:", string.format("+%.1f TPS", p.extraThreatTPS or 0), 1, 1, 1, 0.4, 0.8, 1)
         tt:AddDoubleLine("Estimated Total TPS:", string.format("%.1f TPS", p.totalEstTPS), 1, 1, 1, 0, 1, 0)
-        tt:AddLine("White DPS after +3 boss armor + threat ability on cooldown (excludes Bite/Claw).", 0.7, 0.7, 0.7, true)
+        tt:AddLine("White DPS after +3 boss armor + threat abilities & talents on cooldown.", 0.7, 0.7, 0.7, true)
     end)
 
     if self.db.showPetPane then
@@ -1330,6 +1349,12 @@ function FeralCalc:UpdatePetPane()
         rows.threatAbility:SetText(string.format("|cFFFFCC00%s|r |cFFAAAAAA(%.1f TPS)|r", p.abilityName, p.abilityTPS))
     else
         rows.threatAbility:SetText("|cFF888888None|r")
+    end
+
+    if (p.extraThreatTPS or 0) > 0 then
+        rows.extraThreat:SetText(string.format("|cFF00FF00+%.1f TPS|r |cFFAAAAAA(%d active)|r", p.extraThreatTPS, #(p.extraSources or {})))
+    else
+        rows.extraThreat:SetText("|cFF8888880.0 TPS|r")
     end
 
     rows.totalTps:SetText(string.format("|cFFFF5555%.1f TPS|r |cFFAAAAAA(Boss)|r", p.totalEstTPS))
