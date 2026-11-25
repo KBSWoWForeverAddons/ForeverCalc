@@ -360,10 +360,30 @@ function FeralCalc:AppendSpellTooltip(tooltip, tooltipData)
             string.format("|cFF00CCFF%.2f|r (1T) / |cFF00FF00%.2f|r (3T) / |cFF00FF00%.2f|r (5T)", data.dpm1 or 0, data.dpm3 or 0, data.dpm5 or 0)
         )
 
-    -- 9. DIRECT SPELL NUKES (Paladin, Shaman, Warlock, Mage, Priest, Balance Druid)
-    elseif data.type == "pal_holy_nuke" or data.type == "spell_nuke" then
+    -- 9. PALADIN SEALS (Seal of Righteousness / Seal of Command)
+    elseif data.type == "pal_seal_sor" or data.type == "pal_seal_soc" then
+        local procLabel = (data.type == "pal_seal_soc") and "Per Proc (70% Wpn):" or "Per Swing Holy:"
+        local countLabel = (data.type == "pal_seal_soc") and string.format("%.1f procs", data.hits or 3.5) or string.format("%.0f swings", data.hits or 15)
         tooltip:AddDoubleLine(
-            "  |cFFFFD100Spell Damage:|r",
+            "  |cFFFFD100" .. procLabel .. "|r",
+            string.format("|cFFFFFFFF%s|r (%s = |cFF00FF00%s|r)", FormatDec(data.perHit), countLabel, FormatInt(data.totalDmg))
+        )
+        tooltip:AddDoubleLine(
+            "  |cFFFFD100Judgement Unleash:|r",
+            string.format("|cFFFFFFFF%s - %s|r |cFFAAAAAA(Avg: %s)|r", FormatInt(data.judgeMin), FormatInt(data.judgeMax), FormatInt(data.judgeAvg))
+        )
+        tooltip:AddDoubleLine(
+            "  |cFF00CCFFDamage Per Mana (DPM):|r",
+            string.format("|cFF00CCFF%.2f Dmg / Mana|r (30s total)", data.dpm or 0)
+        )
+
+    -- 10. DIRECT SPELL NUKES & JUDGEMENT (Paladin, Shaman, Warlock, Mage, Priest, Balance Druid)
+    elseif data.type == "pal_holy_nuke" or data.type == "pal_judgement" or data.type == "spell_nuke" then
+        local dmgTitle = (data.type == "pal_judgement")
+            and string.format("Judgement (%s):", data.sealLabel or "SoR")
+            or "Spell Damage:"
+        tooltip:AddDoubleLine(
+            "  |cFFFFD100" .. dmgTitle .. "|r",
             string.format("|cFFFFFFFF%s - %s|r |cFFAAAAAA(Avg: %s)|r", FormatInt(data.minDmg), FormatInt(data.maxDmg), FormatInt(data.avgDmg))
         )
         if (data.targets or 1) > 1 then

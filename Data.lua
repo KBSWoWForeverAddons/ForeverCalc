@@ -53,6 +53,7 @@ FeralCalc.TrackedTalentNames = {
 
     -- Paladin Talents
     ["Improved Righteous Fury"] = "impRighteousFury",  -- +16%/33%/50% Righteous Fury threat bonus
+    ["Improved Seal of Righteousness"] = "impSoR",     -- +3%/6%/9%/12%/15% SoR & JoR damage
     ["Redoubt"]                 = "redoubt",
     ["Precision"]               = "precision",         -- +1%/rank Melee Hit (Rogue) or Melee & Spell Hit (Paladin)
 
@@ -263,6 +264,30 @@ FeralCalc.SpellData = {
     [24275] = { name = "Hammer of Wrath", rank = 1, type = "pal_holy_nuke", minBase = 304, maxBase = 336, spRatio = 0.43, baseCost = 295, powerType = "MANA" },
     [24274] = { name = "Hammer of Wrath", rank = 2, type = "pal_holy_nuke", minBase = 399, maxBase = 441, spRatio = 0.43, baseCost = 360, powerType = "MANA" },
     [24239] = { name = "Hammer of Wrath", rank = 3, type = "pal_holy_nuke", minBase = 504, maxBase = 556, spRatio = 0.43, baseCost = 425, powerType = "MANA" },
+
+    -- HOLY WRATH: AoE Holy damage vs Undead/Demons
+    [2812]  = { name = "Holy Wrath", rank = 1, type = "pal_holy_nuke", minBase = 362, maxBase = 428, targets = 3, spRatio = 0.19, baseCost = 675, powerType = "MANA" },
+    [10318] = { name = "Holy Wrath", rank = 2, type = "pal_holy_nuke", minBase = 490, maxBase = 576, targets = 3, spRatio = 0.19, baseCost = 840, powerType = "MANA" },
+
+    -- SEAL OF RIGHTEOUSNESS: Holy damage per melee swing over 30s + Judgement
+    [20154] = { name = "Seal of Righteousness", rank = 1, type = "pal_seal_sor", dpsBase = 1.8,  jMin = 15,  jMax = 17,  duration = 30, baseCost = 20,  powerType = "MANA" },
+    [20287] = { name = "Seal of Righteousness", rank = 2, type = "pal_seal_sor", dpsBase = 3.6,  jMin = 25,  jMax = 29,  duration = 30, baseCost = 40,  powerType = "MANA" },
+    [20288] = { name = "Seal of Righteousness", rank = 3, type = "pal_seal_sor", dpsBase = 6.0,  jMin = 39,  jMax = 45,  duration = 30, baseCost = 60,  powerType = "MANA" },
+    [20289] = { name = "Seal of Righteousness", rank = 4, type = "pal_seal_sor", dpsBase = 9.2,  jMin = 57,  jMax = 65,  duration = 30, baseCost = 90,  powerType = "MANA" },
+    [20290] = { name = "Seal of Righteousness", rank = 5, type = "pal_seal_sor", dpsBase = 13.0, jMin = 78,  jMax = 88,  duration = 30, baseCost = 120, powerType = "MANA" },
+    [20291] = { name = "Seal of Righteousness", rank = 6, type = "pal_seal_sor", dpsBase = 17.5, jMin = 102, jMax = 114, duration = 30, baseCost = 140, powerType = "MANA" },
+    [20292] = { name = "Seal of Righteousness", rank = 7, type = "pal_seal_sor", dpsBase = 22.5, jMin = 132, jMax = 146, duration = 30, baseCost = 170, powerType = "MANA" },
+    [20293] = { name = "Seal of Righteousness", rank = 8, type = "pal_seal_sor", dpsBase = 28.0, jMin = 162, jMax = 178, duration = 30, baseCost = 200, powerType = "MANA" },
+
+    -- JUDGEMENT: Unleashes active Seal (SoR / SoC)
+    [20271] = { name = "Judgement", rank = 1, type = "pal_judgement", baseCost = 30, powerType = "MANA" },
+
+    -- SEAL OF COMMAND: 70% weapon dmg Holy proc (~7 PPM over 30s) + Judgement
+    [20375] = { name = "Seal of Command", rank = 1, type = "pal_seal_soc", jMin = 47,  jMax = 55,  duration = 30, procsPerMin = 7, baseCost = 65,  powerType = "MANA" },
+    [20915] = { name = "Seal of Command", rank = 2, type = "pal_seal_soc", jMin = 73,  jMax = 85,  duration = 30, procsPerMin = 7, baseCost = 110, powerType = "MANA" },
+    [20918] = { name = "Seal of Command", rank = 3, type = "pal_seal_soc", jMin = 101, jMax = 117, duration = 30, procsPerMin = 7, baseCost = 140, powerType = "MANA" },
+    [20919] = { name = "Seal of Command", rank = 4, type = "pal_seal_soc", jMin = 132, jMax = 152, duration = 30, procsPerMin = 7, baseCost = 180, powerType = "MANA" },
+    [20920] = { name = "Seal of Command", rank = 5, type = "pal_seal_soc", jMin = 169, jMax = 187, duration = 30, procsPerMin = 7, baseCost = 210, powerType = "MANA" },
 }
 
 -- ============================================================================

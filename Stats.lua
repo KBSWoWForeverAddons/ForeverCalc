@@ -409,6 +409,7 @@ function FeralCalc:GetTalentStats()
         oneHandSpec = 0,
         impHeroicStrike = 0,
         impThunderClap = 0,
+        impSoR = 0,
         precision = 0,
         naturesGuidance = 0,
         surefooted = 0,
@@ -1719,7 +1720,81 @@ function FeralCalc:GetAbilityDamage(spellID, spellName, spellSubText)
         local minDmg = entry.minBase + spBonus
         local maxDmg = entry.maxBase + spBonus
         local avgHit = (minDmg + maxDmg) / 2
+        local targets = entry.targets or 1
 
+        result.targets = targets
+        result.minDmg = minDmg
+        result.maxDmg = maxDmg
+        result.avgDmg = avgHit
+        result.cleaveTotal = avgHit * targets
+        result.dpm = (cost > 0) and (avgHit / cost) or 0
+        result.dpmCleave = (cost > 0) and (result.cleaveTotal / cost) or 0
+
+    elseif entry.type == "pal_seal_sor" then
+        local sorMod = 1 + 0.03 * (talents.impSoR or 0)
+        local spd = (stats.mainSpeed and stats.mainSpeed > 0) and stats.mainSpeed or 2.0
+        local sp = stats.holySpellPower or 0
+        local perHit = ((entry.dpsBase * spd) + (0.10 * sp)) * sorMod
+        local duration = entry.duration or 30
+        local hits = math.max(1, duration / spd)
+        local totalDmg = perHit * hits
+        local jSp = 0.50 * sp
+        local judgeMin = ((entry.jMin or 0) + jSp) * sorMod
+        local judgeMax = ((entry.jMax or 0) + jSp) * sorMod
+        local judgeAvg = (judgeMin + judgeMax) / 2
+
+        result.perHit = perHit
+        result.hits = hits
+        result.duration = duration
+        result.totalDmg = totalDmg
+        result.avgDmg = totalDmg
+        result.judgeMin = judgeMin
+        result.judgeMax = judgeMax
+        result.judgeAvg = judgeAvg
+        result.dpm = (cost > 0) and (totalDmg / cost) or 0
+
+    elseif entry.type == "pal_seal_soc" then
+        local sp = stats.holySpellPower or 0
+        local perProc = (avgDmg * 0.70) + (0.20 * sp)
+        local duration = entry.duration or 30
+        local procs = (entry.procsPerMin or 7) * (duration / 60)
+        local totalDmg = perProc * procs
+        local jSp = 0.43 * sp
+        local judgeMin = (entry.jMin or 0) + jSp
+        local judgeMax = (entry.jMax or 0) + jSp
+        local judgeAvg = (judgeMin + judgeMax) / 2
+
+        result.perHit = perProc
+        result.hits = procs
+        result.duration = duration
+        result.totalDmg = totalDmg
+        result.avgDmg = totalDmg
+        result.judgeMin = judgeMin
+        result.judgeMax = judgeMax
+        result.judgeAvg = judgeAvg
+        result.dpm = (cost > 0) and (totalDmg / cost) or 0
+
+    elseif entry.type == "pal_judgement" then
+        local known = self.HighestKnownRankByName or {}
+        local sorSp = known["Seal of Righteousness"]
+        local socSp = known["Seal of Command"]
+        local sealCalc = nil
+        local sealLabel = "SoR"
+        if sorSp then
+            sealCalc = self:GetAbilityDamage(sorSp.spellID, sorSp.name, sorSp.subText)
+            if sealCalc then sealLabel = string.format("SoR R%d", sealCalc.rank or 1) end
+        elseif socSp then
+            sealCalc = self:GetAbilityDamage(socSp.spellID, socSp.name, socSp.subText)
+            if sealCalc then sealLabel = string.format("SoC R%d", sealCalc.rank or 1) end
+        else
+            sealCalc = self:GetAbilityDamage(20154, "Seal of Righteousness", "Rank 1")
+            sealLabel = "SoR R1"
+        end
+        local minDmg = (sealCalc and sealCalc.judgeMin) or 15
+        local maxDmg = (sealCalc and sealCalc.judgeMax) or 17
+        local avgHit = (minDmg + maxDmg) / 2
+
+        result.sealLabel = sealLabel
         result.minDmg = minDmg
         result.maxDmg = maxDmg
         result.avgDmg = avgHit
@@ -2189,7 +2264,7 @@ function FeralCalc:GetSkillPriorityList(stats)
     elseif classFile == "PALADIN" then
         unitLabel = "DPM"
         modeLabel = "Paladin"
-        local palOrder = { "Consecration", "Holy Shield", "Exorcism", "Holy Shock", "Hammer of Wrath" }
+        local palOrder = { "Seal of Righteousness", "Seal of Command", "Judgement", "Consecration", "Holy Shield", "Exorcism", "Holy Shock", "Hammer of Wrath", "Holy Wrath" }
         for _, name in ipairs(palOrder) do
             local sp = GetKnownOrFallback(name)
             if sp then
@@ -2227,7 +2302,52 @@ function FeralCalc:GetSkillPriorityList(stats)
                             eff = calc.dpm,
                             effPostArmor = calc.dpm,
                         })
+                    elseif calc.type == "pal_seal_sor" then
+                        table.insert(list, {
+                            name = calc.name,
+                            displayName = string.format("Seal of Right. (R%d)", calc.rank),
+                            rank = calc.rank,
+                            cost = calc.cost,
+                            unit = "DPM",
+                            avgDmg = calc.totalDmg,
+                            eff = calc.dpm,
+                            effPostArmor = calc.dpm,
+                        })
+                    elseif calc.type == "pal_seal_soc" then
+                        table.insert(list, {
+                            name = calc.name,
+                            displayName = string.format("Seal of Cmd (R%d)", calc.rank),
+                            rank = calc.rank,
+                            cost = calc.cost,
+                            unit = "DPM",
+                            avgDmg = calc.totalDmg,
+                            eff = calc.dpm,
+                            effPostArmor = calc.dpm,
+                        })
+                    elseif calc.type == "pal_judgement" then
+                        table.insert(list, {
+                            name = calc.name,
+                            displayName = string.format("Judgement (%s)", calc.sealLabel or "SoR"),
+                            rank = calc.rank,
+                            cost = calc.cost,
+                            unit = "DPM",
+                            avgDmg = calc.avgDmg,
+                            eff = calc.dpm,
+                            effPostArmor = calc.dpm,
+                        })
                     elseif calc.type == "pal_holy_nuke" then
+                        if (calc.targets or 1) > 1 then
+                            table.insert(list, {
+                                name = calc.name,
+                                displayName = string.format("%s %dT (R%d)", calc.name, calc.targets, calc.rank),
+                                rank = calc.rank,
+                                cost = calc.cost,
+                                unit = "DPM",
+                                avgDmg = calc.cleaveTotal,
+                                eff = calc.dpmCleave,
+                                effPostArmor = calc.dpmCleave,
+                            })
+                        end
                         table.insert(list, {
                             name = calc.name,
                             displayName = string.format("%s (R%d)", calc.name, calc.rank),
@@ -2634,7 +2754,7 @@ function FeralCalc:GetThreatPriorityList(stats)
         local rfMult = hasRF and (1.60 * (1 + 0.1667 * (talents.impRighteousFury or 0))) or 1.00
         modeLabel = hasRF and "Paladin [RF]" or "Paladin"
 
-        local palPool = { "Holy Shield", "Consecration", "Exorcism", "Holy Shock", "Hammer of Wrath" }
+        local palPool = { "Seal of Righteousness", "Seal of Command", "Judgement", "Holy Shield", "Consecration", "Exorcism", "Holy Shock", "Hammer of Wrath", "Holy Wrath" }
         for _, name in ipairs(palPool) do
             local sp = GetKnownOrFallback(name)
             if sp then
@@ -2664,7 +2784,40 @@ function FeralCalc:GetThreatPriorityList(stats)
                             threat = t1,
                             eff = (cost > 0) and (t1 / cost) or 0,
                         })
+                    elseif calc.type == "pal_seal_sor" then
+                        local threat = (calc.totalDmg or 0) * rfMult
+                        table.insert(list, {
+                            displayName = string.format("Seal of Right. (R%d)", calc.rank),
+                            unit = "TPM",
+                            threat = threat,
+                            eff = (cost > 0) and (threat / cost) or 0,
+                        })
+                    elseif calc.type == "pal_seal_soc" then
+                        local threat = (calc.totalDmg or 0) * rfMult
+                        table.insert(list, {
+                            displayName = string.format("Seal of Cmd (R%d)", calc.rank),
+                            unit = "TPM",
+                            threat = threat,
+                            eff = (cost > 0) and (threat / cost) or 0,
+                        })
+                    elseif calc.type == "pal_judgement" then
+                        local threat = (calc.avgDmg or 0) * rfMult
+                        table.insert(list, {
+                            displayName = string.format("Judgement (%s)", calc.sealLabel or "SoR"),
+                            unit = "TPM",
+                            threat = threat,
+                            eff = (cost > 0) and (threat / cost) or 0,
+                        })
                     elseif calc.type == "pal_holy_nuke" then
+                        if (calc.targets or 1) > 1 then
+                            local tc = (calc.cleaveTotal or 0) * rfMult
+                            table.insert(list, {
+                                displayName = string.format("%s %dT (R%d)", calc.name, calc.targets, calc.rank),
+                                unit = "TPM",
+                                threat = tc,
+                                eff = (cost > 0) and (tc / cost) or 0,
+                            })
+                        end
                         local threat = (calc.avgDmg or 0) * rfMult
                         table.insert(list, {
                             displayName = string.format("%s (R%d)", calc.name, calc.rank),
