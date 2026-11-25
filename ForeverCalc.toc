@@ -2,7 +2,7 @@
 ## Title: ForeverCalc |cFFFF7D0A(Tank · DPS · Caster)|r
 ## Notes: Real-time Character Sheet stats pane, DPR/DPE/DPM & Threat ability tooltips, weapon comparisons, and movable Top-7 Skill & Top-5 Threat Priority windows (/fc) for all classes and roles.
 ## Author: Antigravity
-## Version: 1.3.0
+## Version: 1.3.1
 ## X-Curse-Project-ID: 1815205
 ## IconTexture: Interface\AddOns\ForeverCalc\ForeverStatsIcon
 ## SavedVariables: FeralCalcDB

@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.3.1] - 2026-11-24
+
+### Added
+- **Expanded Pet Threat Talents & Skills**: Added Hunter and Warlock pet threat talents (*Intimidation*, *Bestial Discipline*, *Improved Voidwalker*, *Improved Firebolt*, and *Improved Lash of Pain*) and active pet action-bar abilities (*Suffering*, *Thunderstomp*, *Screech*, *Lightning Breath*, *Bite*, *Claw*, *Firebolt*, and *Lash of Pain*) with a new **Bonus Threat** breakdown row and autocast-off warning for *Growl* / *Torment*.
+
+### Changed
+- **Equal-Level & +3 Boss Pet Threat Rows**: Split Pet Threat into two clear rows — `Threat (Lvl X)` for equal-level targets and `Threat (Lvl X+3 Boss)` for `+3` bosses — and updated `Melee White DPS` to show equal-level, raw, and `+3` boss values cleanly.
+
 ## [v1.3.0] - 2026-11-24
 
 ### Added
