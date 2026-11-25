@@ -1022,7 +1022,7 @@ function FeralCalc:CreatePetPane()
 
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     local pFrame = CreateFrame("Frame", "FeralCalcPetPane", UIParent, backdropTemplate)
-    pFrame:SetSize(276, 362)
+    pFrame:SetSize(276, 380)
     pFrame:SetFrameStrata("HIGH")
     pFrame:SetClampedToScreen(true)
     pFrame:SetMovable(true)
@@ -1225,9 +1225,10 @@ function FeralCalc:CreatePetPane()
         tt:AddDoubleLine("AP DPS Contribution:", string.format("+%.1f DPS", p.totalAP / 14), 1, 1, 1, 0.8, 0.8, 0.8)
     end)
 
-    AddPetRow("whiteDps", "Boss White DPS:", "Post-Armor White DPS & Threat", function(tt, p)
+    AddPetRow("whiteDps", "Melee White DPS:", "Pet Melee White DPS", function(tt, p)
+        tt:AddDoubleLine("Raw White DPS:", string.format("%.1f DPS", p.whiteDPS), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine(string.format("vs Lvl %d (-%.1f%% Armor):", p.petLevel, p.equalArmorDRPct), string.format("%.1f DPS", p.equalWhiteDPS), 1, 1, 1, 0, 1, 0)
         tt:AddDoubleLine(string.format("vs Lvl %d Boss (-%.1f%% Armor):", p.bossLevel, p.bossArmorDRPct), string.format("%.1f DPS", p.bossWhiteDPS), 1, 1, 1, 1, 0.82, 0)
-        tt:AddDoubleLine("White Melee Threat:", string.format("%.1f TPS", p.estWhiteTPS), 1, 1, 1, 0, 1, 0)
     end)
 
     AddPetRow("threatAbility", "Threat Ability:", "Pet Taunt / Threat Ability", function(tt, p)
@@ -1260,12 +1261,18 @@ function FeralCalc:CreatePetPane()
         end
     end)
 
-    AddPetRow("totalTps", "Est. Total Threat:", "Combined Sustained Pet TPS", function(tt, p)
-        tt:AddDoubleLine("White Melee TPS (vs Boss):", string.format("%.1f TPS", p.estWhiteTPS), 1, 1, 1, 1, 1, 1)
+    AddPetRow("totalTpsEqual", "Threat (Equal Lvl):", "Estimated Pet TPS (Equal Level)", function(tt, p)
+        tt:AddDoubleLine(string.format("White Melee TPS (Lvl %d):", p.petLevel), string.format("%.1f TPS", p.estWhiteTPSEqual), 1, 1, 1, 1, 1, 1)
         tt:AddDoubleLine("Primary Ability TPS:", string.format("%.1f TPS", p.abilityTPS), 1, 1, 1, 1, 0.82, 0)
         tt:AddDoubleLine("Skills & Talents TPS:", string.format("+%.1f TPS", p.extraThreatTPS or 0), 1, 1, 1, 0.4, 0.8, 1)
-        tt:AddDoubleLine("Estimated Total TPS:", string.format("%.1f TPS", p.totalEstTPS), 1, 1, 1, 0, 1, 0)
-        tt:AddLine("White DPS after +3 boss armor + threat abilities & talents on cooldown.", 0.7, 0.7, 0.7, true)
+        tt:AddDoubleLine(string.format("Total TPS (Lvl %d):", p.petLevel), string.format("%.1f TPS", p.totalEstTPSEqual), 1, 1, 1, 0, 1, 0)
+    end)
+
+    AddPetRow("totalTps", "Threat (+3 Boss):", "Estimated Pet TPS (+3 Boss)", function(tt, p)
+        tt:AddDoubleLine(string.format("White Melee TPS (Lvl %d Boss):", p.bossLevel), string.format("%.1f TPS", p.estWhiteTPS), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Primary Ability TPS:", string.format("%.1f TPS", p.abilityTPS), 1, 1, 1, 1, 0.82, 0)
+        tt:AddDoubleLine("Skills & Talents TPS:", string.format("+%.1f TPS", p.extraThreatTPS or 0), 1, 1, 1, 0.4, 0.8, 1)
+        tt:AddDoubleLine(string.format("Total TPS (Lvl %d Boss):", p.bossLevel), string.format("%.1f TPS", p.totalEstTPS), 1, 1, 1, 1, 0.5, 0.5)
     end)
 
     if self.db.showPetPane then
@@ -1322,6 +1329,8 @@ function FeralCalc:UpdatePetPane()
         self.petPane.hpValue:SetText("|cFF888888-|r")
         if leftLabels.drEqual then leftLabels.drEqual:SetText("DR vs Equal Lvl:") end
         if leftLabels.drBoss then leftLabels.drBoss:SetText("DR vs +3 Boss:") end
+        if leftLabels.totalTpsEqual then leftLabels.totalTpsEqual:SetText("Threat (Equal Lvl):") end
+        if leftLabels.totalTps then leftLabels.totalTps:SetText("Threat (+3 Boss):") end
         for _, valFS in pairs(rows) do
             valFS:SetText("|cFF666666-|r")
         end
@@ -1334,6 +1343,8 @@ function FeralCalc:UpdatePetPane()
 
     if leftLabels.drEqual then leftLabels.drEqual:SetText(string.format("DR vs Lvl %d:", p.petLevel)) end
     if leftLabels.drBoss then leftLabels.drBoss:SetText(string.format("DR vs Lvl %d Boss:", p.bossLevel)) end
+    if leftLabels.totalTpsEqual then leftLabels.totalTpsEqual:SetText(string.format("Threat (Lvl %d):", p.petLevel)) end
+    if leftLabels.totalTps then leftLabels.totalTps:SetText(string.format("Threat (Lvl %d Boss):", p.bossLevel)) end
 
     rows.armor:SetText("|cFFFFFFFF" .. FormatNumber(p.effectiveArmor) .. "|r")
     rows.drEqual:SetText(string.format("|cFFFFFFFF%.2f%%|r", p.drEqualPct))
@@ -1343,7 +1354,7 @@ function FeralCalc:UpdatePetPane()
 
     rows.meleeDmg:SetText(string.format("|cFFFFFFFF%d - %d|r |cFFAAAAAA(%.2fs)|r", math.floor(p.lowDmg + 0.5), math.floor(p.hiDmg + 0.5), p.mainSpeed))
     rows.attackPower:SetText("|cFFFFFFFF" .. FormatNumber(p.totalAP) .. "|r")
-    rows.whiteDps:SetText(string.format("|cFFFFFFFF%.1f DPS|r |cFFAAAAAA(%.1f raw)|r", p.bossWhiteDPS, p.whiteDPS))
+    rows.whiteDps:SetText(string.format("|cFFFFFFFF%.1f DPS|r |cFFAAAAAA(%.1f raw)|r", p.equalWhiteDPS, p.whiteDPS))
 
     if p.abilityThreat > 0 then
         rows.threatAbility:SetText(string.format("|cFFFFCC00%s|r |cFFAAAAAA(%.1f TPS)|r", p.abilityName, p.abilityTPS))
@@ -1357,7 +1368,8 @@ function FeralCalc:UpdatePetPane()
         rows.extraThreat:SetText("|cFF8888880.0 TPS|r")
     end
 
-    rows.totalTps:SetText(string.format("|cFFFF5555%.1f TPS|r |cFFAAAAAA(Boss)|r", p.totalEstTPS))
+    rows.totalTpsEqual:SetText(string.format("|cFF00FF00%.1f TPS|r", p.totalEstTPSEqual))
+    rows.totalTps:SetText(string.format("|cFFFF5555%.1f TPS|r", p.totalEstTPS))
 end
 
 function FeralCalc:UpdateCharacterPaneVisibility()

@@ -1232,6 +1232,9 @@ function FeralCalc:GetPetStats()
     end
 
     local whiteDPS = (mainSpeed > 0) and (avgDmg / mainSpeed) or 0
+    local equalArmor = math.floor(2400 * (petLevel / 60) + 0.5)
+    local equalArmorDR = equalArmor / (equalArmor + 400 + 85 * petLevel)
+    local equalWhiteDPS = whiteDPS * (1 - equalArmorDR)
     local bossArmor = (bossLevel >= 63) and C.BOSS_ARMOR or math.floor(C.BOSS_ARMOR * (bossLevel / 63) + 0.5)
     local bossArmorDR = bossArmor / (bossArmor + 400 + 85 * petLevel)
     local bossWhiteDPS = whiteDPS * (1 - bossArmorDR)
@@ -1471,7 +1474,9 @@ function FeralCalc:GetPetStats()
         extraThreatTPS = extraThreatTPS + (src.tps or 0)
     end
 
+    local estWhiteTPSEqual = equalWhiteDPS
     local estWhiteTPS = bossWhiteDPS
+    local totalEstTPSEqual = estWhiteTPSEqual + abilityTPS + extraThreatTPS
     local totalEstTPS = estWhiteTPS + abilityTPS + extraThreatTPS
 
     return {
@@ -1508,6 +1513,8 @@ function FeralCalc:GetPetStats()
         mainSpeed = mainSpeed,
         totalAP = totalAP,
         whiteDPS = whiteDPS,
+        equalArmorDRPct = equalArmorDR * 100,
+        equalWhiteDPS = equalWhiteDPS,
         bossArmorDRPct = bossArmorDR * 100,
         bossWhiteDPS = bossWhiteDPS,
         happiness = happiness,
@@ -1523,7 +1530,9 @@ function FeralCalc:GetPetStats()
         hasIntimidation = hasIntimidation,
         extraSources = extraSources,
         extraThreatTPS = extraThreatTPS,
+        estWhiteTPSEqual = estWhiteTPSEqual,
         estWhiteTPS = estWhiteTPS,
+        totalEstTPSEqual = totalEstTPSEqual,
         totalEstTPS = totalEstTPS,
     }
 end
