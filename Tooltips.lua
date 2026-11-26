@@ -591,6 +591,7 @@ local function ExtractGearStats(itemLink, visibleTooltip)
         spellPower = 0,
         holySpellPower = 0,
         enchantProcDPS = 0,
+        enchantIgnoresArmor = false,
         enchantName = nil,
     }
 
@@ -598,6 +599,7 @@ local function ExtractGearStats(itemLink, visibleTooltip)
         local ench = FeralCalc:GetWeaponEnchantBonus(itemLink)
         if ench then
             info.enchantProcDPS = ench.procDPS or 0
+            info.enchantIgnoresArmor = ench.ignoresArmor and true or false
             info.enchantName = ench.name
         end
     end
@@ -708,6 +710,7 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
         ap = 0, equipAP = 0, str = 0, agi = 0, sta = 0, int = 0,
         critPct = 0, dodgePct = 0, hitPct = 0, defense = 0, health = 0,
         spellPower = 0, holySpellPower = 0,
+        enchantProcDPS = 0, enchantIgnoresArmor = false,
     }
 
     local isWeapon = WEAPON_EQUIP_LOCS[equipLoc]
@@ -734,6 +737,13 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local newTotalDPS = (isWeapon and (newGear.dps + (newGear.enchantProcDPS or 0)) or 0) + (newAP / 14)
     local eqTotalDPS = (isWeapon and (eqGear.dps + (eqGear.enchantProcDPS or 0)) or 0) + (eqAP / 14)
     local deltaDPS = newTotalDPS - eqTotalDPS
+
+    local physArmorMult = s.bossTargetArmorMult or 0.60
+    local newPhysDPS = (isWeapon and (newGear.dps + (newGear.enchantIgnoresArmor and 0 or (newGear.enchantProcDPS or 0))) or 0) + (newAP / 14)
+    local eqPhysDPS = (isWeapon and (eqGear.dps + (eqGear.enchantIgnoresArmor and 0 or (eqGear.enchantProcDPS or 0))) or 0) + (eqAP / 14)
+    local newMagicEnchDPS = (isWeapon and newGear.enchantIgnoresArmor) and (newGear.enchantProcDPS or 0) or 0
+    local eqMagicEnchDPS = (isWeapon and eqGear.enchantIgnoresArmor) and (eqGear.enchantProcDPS or 0) or 0
+    local deltaPostArmorDPS = ((newPhysDPS - eqPhysDPS) * physArmorMult) + (newMagicEnchDPS - eqMagicEnchDPS)
 
     local levelScale = 60 / math.max(10, s.playerLevel or 60)
     local baseAgiPerCrit = (classFile == "ROGUE") and 29 or ((classFile == "HUNTER") and 53 or 20)
@@ -791,17 +801,18 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
             )
         end
 
-        if not isCat and math.abs(deltaDPS) > 0.05 then
+        if not isCat and math.abs(deltaPostArmorDPS) > 0.05 then
             local bearThreatMult = 1.30 * (1 + 0.03 * (talents.feralInstinct or 0))
-            local deltaTPS = deltaDPS * bearThreatMult
-            local deltaWhiteThreat = deltaSwing * bearThreatMult
+            local deltaPostArmorSwing = deltaPostArmorDPS * normSpeed
+            local deltaTPS = deltaPostArmorDPS * bearThreatMult
+            local deltaWhiteThreat = deltaPostArmorSwing * bearThreatMult
 
             tooltip:AddDoubleLine(
                 "  |cFFFF8040Bear Threat:|r",
                 string.format("%s |cFFAAAAAA(%s/hit)|r", FormatDelta(deltaTPS, " TPS", 1), FormatDelta(deltaWhiteThreat, "", 1))
             )
             if isWeapon then
-                local deltaMaulThreat = deltaSwing * 1.75 * bearThreatMult
+                local deltaMaulThreat = deltaPostArmorSwing * 1.75 * bearThreatMult
                 tooltip:AddDoubleLine(
                     "  |cFFFF8040Maul Threat (1.75x):|r",
                     FormatDelta(deltaMaulThreat, " Threat/hit", 1)
@@ -821,28 +832,34 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
             tooltip:AddDoubleLine("  |cFFFFD100Damage / AP:|r", rightText)
         end
 
-        if classFile == "WARRIOR" and math.abs(deltaDPS) > 0.05 then
+        if classFile == "WARRIOR" and math.abs(deltaPostArmorDPS) > 0.05 then
             local threatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
             tooltip:AddDoubleLine(
                 "  |cFFFF8040Tank Threat:|r",
-                FormatDelta(deltaDPS * threatMult, " TPS", 1)
+                string.format("%s |cFFAAAAAA(Post-Armor)|r", FormatDelta(deltaPostArmorDPS * threatMult, " TPS", 1))
             )
         elseif classFile == "PALADIN" then
             local rfAllMult, rfHolyMult = self:GetRighteousFuryMultipliers(talents)
             local mhSpeed = (s.mainSpeed and s.mainSpeed > 0) and s.mainSpeed or 2.0
             local hasConsec = (self.HighestKnownRankByName and self.HighestKnownRankByName["Consecration"]) ~= nil
             local spToHolyDPS = (0.10 / mhSpeed) + 0.05 + (hasConsec and (0.33 / 8.0) or 0)
+            local physTPS = deltaPostArmorDPS * rfAllMult
             local holySpTPS = deltaHolySP * spToHolyDPS * rfHolyMult
-            local totalPalTPS = (deltaDPS * rfAllMult) + holySpTPS
+            local totalPalTPS = physTPS + holySpTPS
             if math.abs(totalPalTPS) > 0.05 then
-                tooltip:AddDoubleLine(
-                    "  |cFFFF8040Tank Threat:|r",
-                    FormatDelta(totalPalTPS, " TPS", 1)
-                )
+                local threatText
+                if math.abs(holySpTPS) > 0.05 and math.abs(physTPS) > 0.05 then
+                    threatText = string.format("%s |cFFAAAAAA(%s Phys, %s Holy)|r", FormatDelta(totalPalTPS, " TPS", 1), FormatDelta(physTPS, "", 1), FormatDelta(holySpTPS, "", 1))
+                elseif math.abs(holySpTPS) > 0.05 then
+                    threatText = string.format("%s |cFFAAAAAA(Holy SP)|r", FormatDelta(totalPalTPS, " TPS", 1))
+                else
+                    threatText = string.format("%s |cFFAAAAAA(Post-Armor)|r", FormatDelta(totalPalTPS, " TPS", 1))
+                end
+                tooltip:AddDoubleLine("  |cFFFF8040Tank Threat:|r", threatText)
             end
         elseif classFile == "SHAMAN" then
             local spTPS = deltaSP * (0.386 / 6.0) * 2.0
-            local totalShamTPS = deltaDPS + spTPS
+            local totalShamTPS = deltaPostArmorDPS + spTPS
             if math.abs(totalShamTPS) > 0.05 then
                 tooltip:AddDoubleLine(
                     "  |cFFFF8040Tank Threat:|r",
