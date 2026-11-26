@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.4.1] - 2026-11-26
+
+### Added
+- **Spell Power & Holy Spell Damage Gear Threat**: Gear upgrade tooltips now parse `+Spell Power`, `Increases spell power by X`, and `+Holy Spell Damage` (`of Holy Wrath`) items and include their threat contribution for **Paladins** (scaled by Seal, Judgement, Consecration, and your active Righteous Fury Holy multiplier) and **Shamans** (Earth Shock `2x` threat).
+
+### Changed
+- **Post-Armor Physical Melee Threat in Gear Comparisons**: Tank Threat deltas on gear tooltips now apply `+3` boss armor reduction to physical melee DPS while keeping armor-ignoring Holy/Spell Power and magic weapon enchants (*Fiery Weapon*, *Lifestealing*) at 100%, with clear `(Phys, Holy)`, `(Holy SP)`, and `(Post-Armor)` breakdowns for Paladins.
+
 ## [v1.4.0] - 2026-11-25
 
 ### Added
