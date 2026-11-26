@@ -551,7 +551,15 @@ local function ParseTooltipLinesForGear(tt, info)
             end
             if info.spellPower == 0 then
                 local sp = leftText:match("magical spells and effects by up to (%d+)")
+                    or leftText:match("[Ii]ncreases.-spell power by (%d+)")
+                    or leftText:match("^%+(%d+)%s+[Ss]pell [Pp]ower")
+                    or leftText:match("[Ee]quip:.-%+(%d+)%s+[Ss]pell [Pp]ower")
                 if sp then info.spellPower = tonumber(sp) or 0 end
+            end
+            if info.holySpellPower == 0 then
+                local hsp = leftText:match("[Hh]oly spells and effects by up to (%d+)")
+                    or leftText:match("^%+(%d+)%s+[Hh]oly [Ss]pell [Dd]amage")
+                if hsp then info.holySpellPower = tonumber(hsp) or 0 end
             end
         end
 
@@ -581,6 +589,7 @@ local function ExtractGearStats(itemLink, visibleTooltip)
         defense = 0,
         health = 0,
         spellPower = 0,
+        holySpellPower = 0,
         enchantProcDPS = 0,
         enchantName = nil,
     }
@@ -612,6 +621,7 @@ local function ExtractGearStats(itemLink, visibleTooltip)
             info.defense = tonumber(stats["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"]) or 0
             info.health = tonumber(stats["ITEM_MOD_HEALTH_SHORT"]) or 0
             info.spellPower = tonumber(stats["ITEM_MOD_SPELL_POWER_SHORT"] or stats["ITEM_MOD_SPELL_DAMAGE_DONE_SHORT"]) or 0
+            info.holySpellPower = tonumber(stats["ITEM_MOD_SPELL_HOLY_DAMAGE_SHORT"]) or 0
         end
     end
 
@@ -696,7 +706,8 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local eqGear = equippedLink and ExtractGearStats(equippedLink, nil) or {
         dps = 0, speed = 0, minDmg = 0, maxDmg = 0, armor = 0,
         ap = 0, equipAP = 0, str = 0, agi = 0, sta = 0, int = 0,
-        critPct = 0, dodgePct = 0, hitPct = 0, defense = 0, health = 0, spellPower = 0,
+        critPct = 0, dodgePct = 0, hitPct = 0, defense = 0, health = 0,
+        spellPower = 0, holySpellPower = 0,
     }
 
     local isWeapon = WEAPON_EQUIP_LOCS[equipLoc]
@@ -735,6 +746,8 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local deltaDef = newGear.defense - eqGear.defense
     local deltaHit = newGear.hitPct - eqGear.hitPct
     local deltaSP = newGear.spellPower - eqGear.spellPower
+    local deltaOnlyHolySP = newGear.holySpellPower - eqGear.holySpellPower
+    local deltaHolySP = deltaSP + deltaOnlyHolySP
 
     local deltaCrit = (newGear.critPct - eqGear.critPct) + (deltaAgi * agiToCrit)
     local deltaDodge = (newGear.dodgePct - eqGear.dodgePct) + (deltaAgi * agiToDodge) + (deltaDef * 0.04)
@@ -755,7 +768,7 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
         or (math.abs(deltaCrit) > 0.01) or (math.abs(deltaDodge) > 0.01)
         or (math.abs(deltaArmor) >= 1) or (math.abs(deltaHP) >= 1)
         or (math.abs(deltaHit) > 0.01) or (math.abs(deltaDef) >= 1)
-        or (math.abs(deltaSP) >= 1)
+        or (math.abs(deltaHolySP) >= 1)
     if not hasAnyDelta then
         return
     end
@@ -808,22 +821,42 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
             tooltip:AddDoubleLine("  |cFFFFD100Damage / AP:|r", rightText)
         end
 
-        if (classFile == "WARRIOR" or classFile == "PALADIN" or classFile == "SHAMAN") and math.abs(deltaDPS) > 0.05 then
-            local threatMult = 1.0
-            if classFile == "WARRIOR" then
-                threatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
-            elseif classFile == "PALADIN" then
-                threatMult = select(1, self:GetRighteousFuryMultipliers(talents))
-            end
+        if classFile == "WARRIOR" and math.abs(deltaDPS) > 0.05 then
+            local threatMult = 1.30 * (1 + 0.03 * (talents.defiance or 0))
             tooltip:AddDoubleLine(
                 "  |cFFFF8040Tank Threat:|r",
                 FormatDelta(deltaDPS * threatMult, " TPS", 1)
             )
+        elseif classFile == "PALADIN" then
+            local rfAllMult, rfHolyMult = self:GetRighteousFuryMultipliers(talents)
+            local mhSpeed = (s.mainSpeed and s.mainSpeed > 0) and s.mainSpeed or 2.0
+            local hasConsec = (self.HighestKnownRankByName and self.HighestKnownRankByName["Consecration"]) ~= nil
+            local spToHolyDPS = (0.10 / mhSpeed) + 0.05 + (hasConsec and (0.33 / 8.0) or 0)
+            local holySpTPS = deltaHolySP * spToHolyDPS * rfHolyMult
+            local totalPalTPS = (deltaDPS * rfAllMult) + holySpTPS
+            if math.abs(totalPalTPS) > 0.05 then
+                tooltip:AddDoubleLine(
+                    "  |cFFFF8040Tank Threat:|r",
+                    FormatDelta(totalPalTPS, " TPS", 1)
+                )
+            end
+        elseif classFile == "SHAMAN" then
+            local spTPS = deltaSP * (0.386 / 6.0) * 2.0
+            local totalShamTPS = deltaDPS + spTPS
+            if math.abs(totalShamTPS) > 0.05 then
+                tooltip:AddDoubleLine(
+                    "  |cFFFF8040Tank Threat:|r",
+                    FormatDelta(totalShamTPS, " TPS", 1)
+                )
+            end
         end
     end
 
     if math.abs(deltaSP) >= 1 then
         tooltip:AddDoubleLine("  |cFF00CCFFSpell Power:|r", FormatDelta(deltaSP, " SP", 0))
+    end
+    if classFile == "PALADIN" and math.abs(deltaOnlyHolySP) >= 1 then
+        tooltip:AddDoubleLine("  |cFF00CCFFHoly Spell Dmg:|r", FormatDelta(deltaOnlyHolySP, " Holy SP", 0))
     end
     if math.abs(deltaCrit) > 0.01 then
         tooltip:AddDoubleLine("  |cFFFFCC00Crit Chance:|r", FormatDelta(deltaCrit, "%", 2))
