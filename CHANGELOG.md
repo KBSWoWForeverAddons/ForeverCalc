@@ -1,5 +1,11 @@
 # Changelog
 
+## [v1.5.0] - 2026-11-27
+
+### Added
+- **Collapsible Healing & Mana Section**: Added a new **Healing & Mana** breakdown to the Character Sheet stats pane for healing classes (**Priest**, **Paladin**, **Druid**, and **Shaman**), starting minimized (`[+]`) by default so players can expand it as needed. Displays **+Healing**, **Healing Crit**, **MP5 (Not Casting)**, **MP5 (Casting)** (combining Spirit regeneration, gear/buff MP5, and casting-regen talents like *Meditation* and *Reflection*), **Max Mana / Spirit**, and active healing talent bonuses (*Spiritual Guidance*, *Spiritual Healing*, *Holy Specialization*, *Healing Light*, *Illumination*, *Holy Power*, *Gift of Nature*, *Purification*, and *Tidal Mastery*).
+- **Healing Gear Upgrade Tooltips**: Added healing-focused comparison lines to bag, auction house, vendor, and chat item tooltips for healing classes across armor, accessories, weapons, shields, and off-hands (including 2-Handed staves compared against equipped 1-Handed + Off-Hand/Shield combinations). Shows **Bonus Healing** (including Priest *Spiritual Guidance* scaling), **MP5 (OOC / Cast)**, **Heal Crit**, and **Mana Pool** deltas.
+
 ## [v1.4.1] - 2026-11-26
 
 ### Added
