@@ -570,6 +570,17 @@ function FeralCalc:GetTalentStats()
         impVoidwalker = 0,
         impFirebolt = 0,
         impLashOfPain = 0,
+        meditation = 0,
+        reflection = 0,
+        spiritualGuidance = 0,
+        spiritualHealing = 0,
+        holySpec = 0,
+        healingLight = 0,
+        illumination = 0,
+        holyPower = 0,
+        giftOfNature = 0,
+        purification = 0,
+        tidalMastery = 0,
         discovered = {},
         tabPoints = {},
         tabNames = {},
@@ -1135,6 +1146,63 @@ function FeralCalc:GetMitigationStats()
     local isSpellHitCappedBoss = (spellHitPct >= 16.0)
     local isSpellHitCappedEqual = (spellHitPct >= 3.0)
 
+    -- Healer Stats & Mana Regen (Priest, Paladin, Druid, Shaman)
+    local isHealerClass = (classFile == "PRIEST" or classFile == "PALADIN" or classFile == "DRUID" or classFile == "SHAMAN")
+    local intellect, spirit = 0, 0
+    if type(UnitStat) == "function" then
+        local okI, _, effInt = pcall(UnitStat, "player", 4)
+        if okI then intellect = SafeNumber(effInt, 0) end
+        local okS, _, effSpi = pcall(UnitStat, "player", 5)
+        if okS then spirit = SafeNumber(effSpi, 0) end
+    end
+
+    local maxMana = 0
+    local manaType = (Enum and Enum.PowerType and Enum.PowerType.Mana) or 0
+    if type(UnitPowerMax) == "function" then
+        local okM, mm = pcall(UnitPowerMax, "player", manaType)
+        if okM then maxMana = SafeNumber(mm, 0) end
+    end
+
+    local bonusHealing = maxSpellPower
+    if type(GetSpellBonusHealing) == "function" then
+        local okH, bh = pcall(GetSpellBonusHealing)
+        if okH and SafeNumber(bh, 0) > 0 then
+            bonusHealing = SafeNumber(bh, 0)
+        end
+    end
+
+    local healCritPct = spellCritPct
+    if type(GetSpellCritChance) == "function" then
+        local healSchool = (classFile == "DRUID" or classFile == "SHAMAN") and 4 or 2
+        local okHC, hc = pcall(GetSpellCritChance, healSchool)
+        if okHC and SafeNumber(hc, 0) > 0 then
+            healCritPct = SafeNumber(hc, 0)
+        end
+    end
+
+    local castingSpiritPct = math.min(0.85, ((talents.meditation or 0) + (talents.reflection or 0)) * 0.05)
+    local spiritPerMp5OOC = (classFile == "PRIEST") and 0.625 or 0.50
+    local estSpiritMp5OOC = ((classFile == "PRIEST") and 32.5 or 37.5) + (spirit * spiritPerMp5OOC)
+
+    local apiOOC, apiCasting = 0, 0
+    if type(GetManaRegen) == "function" then
+        local okR, basePerSec, castPerSec = pcall(GetManaRegen)
+        if okR then
+            apiOOC = SafeNumber(basePerSec, 0) * 5
+            apiCasting = SafeNumber(castPerSec, 0) * 5
+        end
+    end
+
+    local mp5OOC = (apiOOC > 0) and apiOOC or estSpiritMp5OOC
+    local mp5Casting = (apiCasting > 0) and apiCasting or (estSpiritMp5OOC * castingSpiritPct)
+    local spiritMp5OOC = estSpiritMp5OOC
+    if apiOOC > 0 and mp5OOC >= mp5Casting and castingSpiritPct < 1 then
+        spiritMp5OOC = math.min(mp5OOC, math.max(0, (mp5OOC - mp5Casting) / (1 - castingSpiritPct)))
+    end
+    local gearMp5 = math.max(0, mp5OOC - spiritMp5OOC)
+    local spiritMp5Casting = spiritMp5OOC * castingSpiritPct
+    mp5Casting = math.max(mp5Casting, gearMp5 + spiritMp5Casting)
+
     -- Ranged Weapon Damage, Ranged AP, Ranged Crit & Ranged Hit (for Hunters)
     local rangedCritPct = meleeCritPct
     if type(GetRangedCritChance) == "function" then
@@ -1301,6 +1369,21 @@ function FeralCalc:GetMitigationStats()
         enchantProcDPS = enchantProcDPS,
         enchantProcTPS = enchantProcTPS,
         enchantThreatMult = enchantThreatMult,
+
+        -- Healer Stats & Mana Regen
+        isHealerClass = isHealerClass,
+        intellect = intellect,
+        spirit = spirit,
+        maxMana = maxMana,
+        bonusHealing = bonusHealing,
+        healCritPct = healCritPct,
+        mp5OOC = mp5OOC,
+        mp5Casting = mp5Casting,
+        spiritMp5OOC = spiritMp5OOC,
+        spiritMp5Casting = spiritMp5Casting,
+        gearMp5 = gearMp5,
+        castingSpiritPct = castingSpiritPct,
+        spiritPerMp5OOC = spiritPerMp5OOC,
 
         -- Talents
         talents = talents,

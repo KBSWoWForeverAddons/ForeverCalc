@@ -515,6 +515,63 @@ function FeralCalc:CreateCharacterPane()
         end
     end)
 
+    -- =========================================================================
+    -- SECTION 4: HEALING & MANA (Default minimized; shown for healer classes)
+    -- =========================================================================
+    AddSectionHeader("healing", "Healing & Mana")
+
+    AddStatRow("bonusHealing", "Bonus Healing:", "Bonus Healing Power", function(tt, s)
+        tt:AddDoubleLine("Bonus Healing:", string.format("+%d", s.bonusHealing or 0), 1, 1, 1, 0, 1, 0)
+        local t = s.talents or {}
+        if s.classFile == "PRIEST" and (t.spiritualGuidance or 0) > 0 then
+            tt:AddDoubleLine("Spiritual Guidance:", string.format("+%d%% Spirit (+%.0f Heal)", t.spiritualGuidance * 5, (s.spirit or 0) * 0.05 * t.spiritualGuidance), 1, 1, 1, 0.4, 0.8, 1)
+        end
+        if (t.spiritualHealing or 0) > 0 then
+            tt:AddDoubleLine("Spiritual Healing:", string.format("+%d%% Healing Done", t.spiritualHealing * 2), 1, 1, 1, 0.4, 1, 0.4)
+        elseif (t.healingLight or 0) > 0 then
+            tt:AddDoubleLine("Healing Light:", string.format("+%d%% HL / FoL Healing", t.healingLight * 4), 1, 1, 1, 0.4, 1, 0.4)
+        elseif (t.giftOfNature or 0) > 0 then
+            tt:AddDoubleLine("Gift of Nature:", string.format("+%d%% Healing Done", t.giftOfNature * 2), 1, 1, 1, 0.4, 1, 0.4)
+        elseif (t.purification or 0) > 0 then
+            tt:AddDoubleLine("Purification:", string.format("+%d%% Healing Done", t.purification * 2), 1, 1, 1, 0.4, 1, 0.4)
+        end
+    end)
+
+    AddStatRow("healCrit", "Healing Crit:", "Healing Critical Strike Chance", function(tt, s)
+        tt:AddDoubleLine("Heal Crit Chance:", string.format("%.2f%%", s.healCritPct or 0), 1, 1, 1, 1, 1, 1)
+        local t = s.talents or {}
+        if s.classFile == "PALADIN" and (t.illumination or 0) > 0 then
+            tt:AddDoubleLine("Illumination:", string.format("%d%% Mana refund on crit", t.illumination * 20), 1, 1, 1, 0, 0.8, 1)
+        end
+        if s.classFile == "PRIEST" and (t.holySpec or 0) > 0 then
+            tt:AddDoubleLine("Holy Specialization:", string.format("+%d%% Holy Crit (incl.)", t.holySpec), 0.8, 0.8, 0.8, 0.4, 0.8, 1)
+        elseif s.classFile == "PALADIN" and (t.holyPower or 0) > 0 then
+            tt:AddDoubleLine("Holy Power:", string.format("+%d%% Holy Crit (incl.)", t.holyPower), 0.8, 0.8, 0.8, 0.4, 0.8, 1)
+        elseif s.classFile == "SHAMAN" and (t.tidalMastery or 0) > 0 then
+            tt:AddDoubleLine("Tidal Mastery:", string.format("+%d%% Heal Crit (incl.)", t.tidalMastery), 0.8, 0.8, 0.8, 0.4, 0.8, 1)
+        end
+    end)
+
+    AddStatRow("mp5Ooc", "MP5 (Not Casting):", "Mana Regen Out of Combat / 5s Rule", function(tt, s)
+        tt:AddDoubleLine("Total OOC Regen:", string.format("%.1f MP5", s.mp5OOC or 0), 1, 1, 1, 0, 0.8, 1)
+        tt:AddDoubleLine("Spirit Regen (OOC):", string.format("%.1f MP5", s.spiritMp5OOC or 0), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Gear & Buff MP5:", string.format("%.1f MP5", s.gearMp5 or 0), 1, 1, 1, 0, 1, 0)
+        tt:AddDoubleLine("Total Spirit:", string.format("%d (%.3f MP5 / Spi)", math.floor((s.spirit or 0) + 0.5), s.spiritPerMp5OOC or 0.5), 1, 1, 1, 0.8, 0.8, 0.8)
+    end)
+
+    AddStatRow("mp5Cast", "MP5 (Casting):", "Mana Regen While Casting", function(tt, s)
+        tt:AddDoubleLine("Total Casting Regen:", string.format("%.1f MP5", s.mp5Casting or 0), 1, 1, 1, 0.4, 0.8, 1)
+        tt:AddDoubleLine(string.format("Spirit While Casting (%.0f%%):", (s.castingSpiritPct or 0) * 100), string.format("%.1f MP5", s.spiritMp5Casting or 0), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Gear & Buff MP5:", string.format("%.1f MP5", s.gearMp5 or 0), 1, 1, 1, 0, 1, 0)
+        tt:AddLine("Includes Meditation / Reflection Spirit retention while inside the 5-second rule.", 0.7, 0.7, 0.7, true)
+    end)
+
+    AddStatRow("maxMana", "Max Mana / Spirit:", "Mana Pool & Base Stats", function(tt, s)
+        tt:AddDoubleLine("Max Mana:", FormatNumber(s.maxMana or 0), 1, 1, 1, 0.4, 0.7, 1)
+        tt:AddDoubleLine("Intellect:", FormatNumber(s.intellect or 0), 1, 1, 1, 1, 1, 1)
+        tt:AddDoubleLine("Spirit:", FormatNumber(s.spirit or 0), 1, 1, 1, 1, 1, 1)
+    end)
+
     self.characterPane = pane
 
     PaperDollFrame:HookScript("OnShow", function()
@@ -541,6 +598,9 @@ function FeralCalc:GetSectionCollapsed(sectionKey, stats)
         return byChar[charKey][sectionKey] and true or false
     end
 
+    if sectionKey == "healing" then
+        return true
+    end
     if sectionKey == "mitigation" or sectionKey == "avoidance" then
         stats = stats or self.lastStats or self:GetMitigationStats()
         return not self:IsTankSpecByTalents(stats.classFile, stats.talents)
@@ -554,27 +614,36 @@ function FeralCalc:LayoutCharacterPane()
         return
     end
 
+    local stats = self.lastStats or self:GetMitigationStats()
     local yOffset = -84
     for _, sec in ipairs(pane.sections) do
-        local isCollapsed = self:GetSectionCollapsed(sec.key, self.lastStats)
-        yOffset = yOffset - 8
-
-        sec.headerBtn:ClearAllPoints()
-        sec.headerBtn:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
-        if sec.indicator then
-            sec.indicator:SetText(isCollapsed and "|cFFAAAAAA[+]|r" or "|cFFFFD100[-]|r")
-        end
-
-        yOffset = yOffset - 20
-
-        for _, row in ipairs(sec.rows) do
-            if isCollapsed then
+        if sec.key == "healing" and stats and not stats.isHealerClass then
+            sec.headerBtn:Hide()
+            for _, row in ipairs(sec.rows) do
                 row:Hide()
-            else
-                row:ClearAllPoints()
-                row:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
-                row:Show()
-                yOffset = yOffset - 18
+            end
+        else
+            sec.headerBtn:Show()
+            local isCollapsed = self:GetSectionCollapsed(sec.key, stats)
+            yOffset = yOffset - 8
+
+            sec.headerBtn:ClearAllPoints()
+            sec.headerBtn:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
+            if sec.indicator then
+                sec.indicator:SetText(isCollapsed and "|cFFAAAAAA[+]|r" or "|cFFFFD100[-]|r")
+            end
+
+            yOffset = yOffset - 20
+
+            for _, row in ipairs(sec.rows) do
+                if isCollapsed then
+                    row:Hide()
+                else
+                    row:ClearAllPoints()
+                    row:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, yOffset)
+                    row:Show()
+                    yOffset = yOffset - 18
+                end
             end
         end
     end
@@ -1583,6 +1652,15 @@ function FeralCalc:UpdateCharacterPane()
         end
     end
 
+    -- Section 4: Healing & Mana
+    if s.isHealerClass and rows.bonusHealing then
+        rows.bonusHealing:SetText("|cFF00FF00+" .. FormatNumber(s.bonusHealing or 0) .. "|r")
+        rows.healCrit:SetText(string.format("|cFFFFFFFF%.2f%%|r", s.healCritPct or 0))
+        rows.mp5Ooc:SetText(string.format("|cFF00CCFF%.1f MP5|r", s.mp5OOC or 0))
+        rows.mp5Cast:SetText(string.format("|cFF66CCFF%.1f MP5|r", s.mp5Casting or 0))
+        rows.maxMana:SetText(string.format("|cFF6699FF%s|r |cFFAAAAAA(%d Spi)|r", FormatNumber(s.maxMana or 0), math.floor((s.spirit or 0) + 0.5)))
+    end
+
     self:LayoutCharacterPane()
 end
 
@@ -1603,6 +1681,7 @@ local trackedEvents = {
     "UNIT_DEFENSE",
     "UNIT_RESISTANCES",
     "UNIT_MAXHEALTH",
+    "UNIT_MAXPOWER",
     "COMBAT_RATING_UPDATE",
     "PLAYER_DAMAGE_DONE_MODS",
     "UPDATE_SHAPESHIFT_FORM",

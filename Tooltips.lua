@@ -528,9 +528,19 @@ local function ParseTooltipLinesForGear(tt, info)
                 local iv = leftText:match("^%+(%d+)%s+[Ii]ntellect")
                 if iv then info.int = tonumber(iv) or 0 end
             end
+            if info.spi == 0 then
+                local spv = leftText:match("^%+(%d+)%s+[Ss]pirit")
+                if spv then info.spi = tonumber(spv) or 0 end
+            end
             if info.critPct == 0 then
-                local c = leftText:match("critical strike by ([%d%.]+)%%")
+                local c = leftText:match("chance to get a critical strike by ([%d%.]+)%%")
+                    or leftText:match("melee critical strike by ([%d%.]+)%%")
                 if c then info.critPct = tonumber(c) or 0 end
+            end
+            if info.spellCritPct == 0 then
+                local sc = leftText:match("critical strike with spells by ([%d%.]+)%%")
+                    or leftText:match("spell critical strike by ([%d%.]+)%%")
+                if sc then info.spellCritPct = tonumber(sc) or 0 end
             end
             if info.dodgePct == 0 then
                 local d = leftText:match("dodge an attack by ([%d%.]+)%%")
@@ -548,6 +558,19 @@ local function ParseTooltipLinesForGear(tt, info)
                 local hp = leftText:match("^%+(%d+)%s+[Hh]ealth")
                     or leftText:match("[Ee]quip:.-%+(%d+)%s+[Hh]ealth")
                 if hp then info.health = tonumber(hp) or 0 end
+            end
+            if info.mp5 == 0 then
+                local mp5Str = leftText:match("[Rr]estores (%d+) mana per 5 sec")
+                    or leftText:match("^%+(%d+)%s+[Mm]ana every 5 sec")
+                    or leftText:match("^%+(%d+)%s+MP5")
+                if mp5Str then info.mp5 = tonumber(mp5Str) or 0 end
+            end
+            if info.healingPower == 0 then
+                local hl = leftText:match("[Ii]ncreases healing done by.-by up to (%d+)")
+                    or leftText:match("healing done by spells and effects by up to (%d+)")
+                    or leftText:match("^%+(%d+)%s+[Hh]ealing")
+                    or leftText:match("[Ee]quip:.-%+(%d+)%s+[Hh]ealing")
+                if hl then info.healingPower = tonumber(hl) or 0 end
             end
             if info.spellPower == 0 then
                 local sp = leftText:match("magical spells and effects by up to (%d+)")
@@ -583,14 +606,21 @@ local function ExtractGearStats(itemLink, visibleTooltip)
         agi = 0,
         sta = 0,
         int = 0,
+        spi = 0,
         critPct = 0,
+        spellCritPct = 0,
         dodgePct = 0,
         hitPct = 0,
         defense = 0,
         health = 0,
+        mp5 = 0,
         spellPower = 0,
         holySpellPower = 0,
+        healingPower = 0,
+        totalHealing = 0,
         enchantProcDPS = 0,
+        physEnchantDPS = 0,
+        magicEnchantDPS = 0,
         enchantIgnoresArmor = false,
         enchantName = nil,
     }
@@ -600,6 +630,11 @@ local function ExtractGearStats(itemLink, visibleTooltip)
         if ench then
             info.enchantProcDPS = ench.procDPS or 0
             info.enchantIgnoresArmor = ench.ignoresArmor and true or false
+            if info.enchantIgnoresArmor then
+                info.magicEnchantDPS = info.enchantProcDPS
+            else
+                info.physEnchantDPS = info.enchantProcDPS
+            end
             info.enchantName = ench.name
         end
     end
@@ -617,13 +652,17 @@ local function ExtractGearStats(itemLink, visibleTooltip)
             info.agi = tonumber(stats["ITEM_MOD_AGILITY_SHORT"]) or 0
             info.sta = tonumber(stats["ITEM_MOD_STAMINA_SHORT"]) or 0
             info.int = tonumber(stats["ITEM_MOD_INTELLECT_SHORT"]) or 0
+            info.spi = tonumber(stats["ITEM_MOD_SPIRIT_SHORT"]) or 0
             info.critPct = tonumber(stats["ITEM_MOD_CRIT_RATING_SHORT"] or stats["ITEM_MOD_CRIT_MELEE_RATING_SHORT"]) or 0
+            info.spellCritPct = tonumber(stats["ITEM_MOD_CRIT_SPELL_RATING_SHORT"]) or 0
             info.dodgePct = tonumber(stats["ITEM_MOD_DODGE_RATING_SHORT"]) or 0
             info.hitPct = tonumber(stats["ITEM_MOD_HIT_RATING_SHORT"] or stats["ITEM_MOD_HIT_MELEE_RATING_SHORT"]) or 0
             info.defense = tonumber(stats["ITEM_MOD_DEFENSE_SKILL_RATING_SHORT"]) or 0
             info.health = tonumber(stats["ITEM_MOD_HEALTH_SHORT"]) or 0
+            info.mp5 = tonumber(stats["ITEM_MOD_POWER_REGEN0_SHORT"]) or 0
             info.spellPower = tonumber(stats["ITEM_MOD_SPELL_POWER_SHORT"] or stats["ITEM_MOD_SPELL_DAMAGE_DONE_SHORT"]) or 0
             info.holySpellPower = tonumber(stats["ITEM_MOD_SPELL_HOLY_DAMAGE_SHORT"]) or 0
+            info.healingPower = tonumber(stats["ITEM_MOD_SPELL_HEALING_DONE_SHORT"]) or 0
         end
     end
 
@@ -642,6 +681,7 @@ local function ExtractGearStats(itemLink, visibleTooltip)
     if info.dps == 0 and info.minDmg > 0 and info.maxDmg > 0 and info.speed > 0 then
         info.dps = ((info.minDmg + info.maxDmg) / 2) / info.speed
     end
+    info.totalHealing = math.max(info.healingPower or 0, info.spellPower or 0)
 
     return info
 end
@@ -707,11 +747,29 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local newGear = ExtractGearStats(itemLink, tooltip)
     local eqGear = equippedLink and ExtractGearStats(equippedLink, nil) or {
         dps = 0, speed = 0, minDmg = 0, maxDmg = 0, armor = 0,
-        ap = 0, equipAP = 0, str = 0, agi = 0, sta = 0, int = 0,
-        critPct = 0, dodgePct = 0, hitPct = 0, defense = 0, health = 0,
-        spellPower = 0, holySpellPower = 0,
-        enchantProcDPS = 0, enchantIgnoresArmor = false,
+        ap = 0, equipAP = 0, str = 0, agi = 0, sta = 0, int = 0, spi = 0,
+        critPct = 0, spellCritPct = 0, dodgePct = 0, hitPct = 0, defense = 0,
+        health = 0, mp5 = 0, spellPower = 0, holySpellPower = 0, healingPower = 0,
+        totalHealing = 0, enchantProcDPS = 0, physEnchantDPS = 0, magicEnchantDPS = 0,
+        enchantIgnoresArmor = false,
     }
+
+    -- When comparing a 2H weapon against an equipped 1H + Off-Hand/Shield, include slot 17
+    if equipLoc == "INVTYPE_2HWEAPON" and type(GetInventoryItemLink) == "function" then
+        local link17 = SafeText(GetInventoryItemLink("player", 17))
+        if link17 and link17 ~= itemLink then
+            local eqOH = ExtractGearStats(link17, nil)
+            local sumKeys = {
+                "armor", "ap", "str", "agi", "sta", "int", "spi",
+                "critPct", "spellCritPct", "dodgePct", "hitPct", "defense",
+                "health", "mp5", "spellPower", "holySpellPower", "healingPower",
+                "totalHealing", "enchantProcDPS", "physEnchantDPS", "magicEnchantDPS",
+            }
+            for _, k in ipairs(sumKeys) do
+                eqGear[k] = (eqGear[k] or 0) + (eqOH[k] or 0)
+            end
+        end
+    end
 
     local isWeapon = WEAPON_EQUIP_LOCS[equipLoc]
     if isWeapon and (newGear.dps <= 0 or eqGear.dps <= 0) then
@@ -739,10 +797,10 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local deltaDPS = newTotalDPS - eqTotalDPS
 
     local physArmorMult = s.bossTargetArmorMult or 0.60
-    local newPhysDPS = (isWeapon and (newGear.dps + (newGear.enchantIgnoresArmor and 0 or (newGear.enchantProcDPS or 0))) or 0) + (newAP / 14)
-    local eqPhysDPS = (isWeapon and (eqGear.dps + (eqGear.enchantIgnoresArmor and 0 or (eqGear.enchantProcDPS or 0))) or 0) + (eqAP / 14)
-    local newMagicEnchDPS = (isWeapon and newGear.enchantIgnoresArmor) and (newGear.enchantProcDPS or 0) or 0
-    local eqMagicEnchDPS = (isWeapon and eqGear.enchantIgnoresArmor) and (eqGear.enchantProcDPS or 0) or 0
+    local newPhysDPS = (isWeapon and (newGear.dps + (newGear.physEnchantDPS or 0)) or 0) + (newAP / 14)
+    local eqPhysDPS = (isWeapon and (eqGear.dps + (eqGear.physEnchantDPS or 0)) or 0) + (eqAP / 14)
+    local newMagicEnchDPS = isWeapon and (newGear.magicEnchantDPS or 0) or 0
+    local eqMagicEnchDPS = isWeapon and (eqGear.magicEnchantDPS or 0) or 0
     local deltaPostArmorDPS = ((newPhysDPS - eqPhysDPS) * physArmorMult) + (newMagicEnchDPS - eqMagicEnchDPS)
 
     local levelScale = 60 / math.max(10, s.playerLevel or 60)
@@ -753,11 +811,25 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
 
     local deltaAgi = newGear.agi - eqGear.agi
     local deltaSta = newGear.sta - eqGear.sta
+    local deltaInt = newGear.int - eqGear.int
+    local deltaSpi = newGear.spi - eqGear.spi
     local deltaDef = newGear.defense - eqGear.defense
     local deltaHit = newGear.hitPct - eqGear.hitPct
     local deltaSP = newGear.spellPower - eqGear.spellPower
     local deltaOnlyHolySP = newGear.holySpellPower - eqGear.holySpellPower
     local deltaHolySP = deltaSP + deltaOnlyHolySP
+
+    -- Healer Stat Deltas
+    local sgBonus = (classFile == "PRIEST") and (deltaSpi * 0.05 * (talents.spiritualGuidance or 0)) or 0
+    local deltaHealing = ((newGear.totalHealing or 0) - (eqGear.totalHealing or 0)) + sgBonus
+    local deltaGearMp5 = (newGear.mp5 or 0) - (eqGear.mp5 or 0)
+    local spiritPerMp5 = s.spiritPerMp5OOC or ((classFile == "PRIEST") and 0.625 or 0.50)
+    local castPct = s.castingSpiritPct or 0
+    local deltaMp5OOC = deltaGearMp5 + (deltaSpi * spiritPerMp5)
+    local deltaMp5Cast = deltaGearMp5 + (deltaSpi * spiritPerMp5 * castPct)
+    local deltaMana = deltaInt * 15
+    local baseIntPerCrit = (classFile == "PALADIN") and 54 or 59.5
+    local deltaHealCrit = ((newGear.spellCritPct or 0) - (eqGear.spellCritPct or 0)) + ((deltaInt / baseIntPerCrit) * levelScale)
 
     local deltaCrit = (newGear.critPct - eqGear.critPct) + (deltaAgi * agiToCrit)
     local deltaDodge = (newGear.dodgePct - eqGear.dodgePct) + (deltaAgi * agiToDodge) + (deltaDef * 0.04)
@@ -774,11 +846,15 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     local hotwMult = isBear and (1 + 0.04 * (talents.heartOfTheWild or 0)) or 1.0
     local deltaHP = (deltaSta * 10 * hotwMult) + (newGear.health - eqGear.health)
 
+    local hasHealerDelta = s.isHealerClass and (
+        (math.abs(deltaHealing) >= 1) or (math.abs(deltaMp5OOC) > 0.05)
+        or (math.abs(deltaMana) >= 1) or (math.abs(deltaHealCrit) > 0.01)
+    )
     local hasAnyDelta = (math.abs(deltaDPS) > 0.05) or (math.abs(deltaAP) >= 1)
         or (math.abs(deltaCrit) > 0.01) or (math.abs(deltaDodge) > 0.01)
         or (math.abs(deltaArmor) >= 1) or (math.abs(deltaHP) >= 1)
         or (math.abs(deltaHit) > 0.01) or (math.abs(deltaDef) >= 1)
-        or (math.abs(deltaHolySP) >= 1)
+        or (math.abs(deltaHolySP) >= 1) or hasHealerDelta
     if not hasAnyDelta then
         return
     end
@@ -874,6 +950,26 @@ function FeralCalc:AppendItemTooltip(tooltip, tooltipData)
     end
     if classFile == "PALADIN" and math.abs(deltaOnlyHolySP) >= 1 then
         tooltip:AddDoubleLine("  |cFF00CCFFHoly Spell Dmg:|r", FormatDelta(deltaOnlyHolySP, " Holy SP", 0))
+    end
+    if s.isHealerClass then
+        if math.abs(deltaHealing) >= 1 then
+            tooltip:AddDoubleLine("  |cFF66FF66Bonus Healing:|r", FormatDelta(deltaHealing, " Heal", 0))
+        end
+        if math.abs(deltaMp5OOC) > 0.05 or math.abs(deltaMp5Cast) > 0.05 then
+            tooltip:AddDoubleLine(
+                "  |cFF00CCFFMP5 (OOC / Cast):|r",
+                string.format("%s / %s MP5", FormatDelta(deltaMp5OOC, "", 1), FormatDelta(deltaMp5Cast, "", 1))
+            )
+        end
+        if math.abs(deltaHealCrit) > 0.01 then
+            tooltip:AddDoubleLine("  |cFFFFCC00Heal Crit:|r", FormatDelta(deltaHealCrit, "%", 2))
+        end
+        if math.abs(deltaMana) >= 1 then
+            tooltip:AddDoubleLine(
+                "  |cFF6699FFMana Pool:|r",
+                string.format("%s |cFFAAAAAA(%s Int)|r", FormatDelta(deltaMana, " Mana", 0), FormatDelta(deltaInt, "", 0))
+            )
+        end
     end
     if math.abs(deltaCrit) > 0.01 then
         tooltip:AddDoubleLine("  |cFFFFCC00Crit Chance:|r", FormatDelta(deltaCrit, "%", 2))

@@ -72,6 +72,19 @@ FeralCalc.TrackedTalentNames = {
     ["Improved Voidwalker"]     = "impVoidwalker",     -- Warlock Demo: +10%/20%/30% Torment & Suffering
     ["Improved Firebolt"]       = "impFirebolt",       -- Warlock Destro: -0.25s/-0.5s Firebolt cast time
     ["Improved Lash of Pain"]   = "impLashOfPain",     -- Warlock Destro: -3s/-6s Lash of Pain CD
+
+    -- Healer Talents (Priest, Paladin, Druid, Shaman)
+    ["Meditation"]              = "meditation",        -- Priest Disc: +5%/10%/15% Spirit mana regen while casting
+    ["Reflection"]              = "reflection",        -- Druid Resto: +5%/10%/15% Spirit mana regen while casting
+    ["Spiritual Guidance"]      = "spiritualGuidance", -- Priest Holy: +5%/10%/15%/20%/25% Spirit as Healing & SP
+    ["Spiritual Healing"]       = "spiritualHealing",  -- Priest Holy: +2%/4%/6%/8%/10% healing done
+    ["Holy Specialization"]     = "holySpec",          -- Priest Holy: +1%..5% Holy crit
+    ["Healing Light"]           = "healingLight",      -- Paladin Holy: +4%/8%/12% Holy Light & Flash of Light
+    ["Illumination"]            = "illumination",      -- Paladin Holy: 20%..100% mana refund on heal crit
+    ["Holy Power"]              = "holyPower",         -- Paladin Holy: +1%..5% Holy spell crit
+    ["Gift of Nature"]          = "giftOfNature",      -- Druid Resto: +2%..10% healing done
+    ["Purification"]            = "purification",      -- Shaman Resto: +2%..10% healing done
+    ["Tidal Mastery"]           = "tidalMastery",      -- Shaman Resto: +1%..5% healing & lightning crit
 }
 
 -- ============================================================================
